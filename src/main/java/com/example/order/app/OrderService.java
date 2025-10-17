@@ -32,8 +32,9 @@ public class OrderService {
 	  }
 
 	public OrderResult placeOrder(OrderRequest req) {
-		// TODO: Guardが増えたら validateRequest(...) を導入（lines null/empty は次サイクル）
-		for (var line : req.lines()) {                 // ※ anchorのNormal/Abnormalはlinesを渡してる前提
+		validateRequest(req);
+
+		for (var line : req.lines()) {                 
 			if (line.qty() <= 0) {
 				// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
 				throw new IllegalArgumentException("qty must be > 0");
@@ -55,5 +56,15 @@ public class OrderService {
 				BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
 				BigDecimal.ZERO, BigDecimal.ZERO, List.of()
 		);
+	}
+
+	private void validateRequest(OrderRequest req) {
+		// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
+		if (req == null)
+	        throw new IllegalArgumentException("orderRequest must not be null");
+	    if (req.lines() == null)
+	        throw new IllegalArgumentException("lines must not be null");
+	    if (req.lines().isEmpty())
+	        throw new IllegalArgumentException("lines must not be empty");
 	}
 }
