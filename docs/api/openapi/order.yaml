@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: Order Pricing API
+  version: 1.0.0
+  description: >
+    注文価格計算サービスのAPI仕様書。
+    指定された注文行と地域に基づき、割引および税計算を実行する。
+components:
+	schemas:
+		OrderRequest:
+			type: object
+			properties:
+				region:
+					type: string
+					example: JP
+				mode:
+					type: string
+					enum: [HALF_UP, HALF_DOWN]
+				lines:
+					type: array
+					items:
+						$ref: '#/components/schemas/OrderLine'
+		OrderLine:
+			type: object
+			properties:
+				productId:
+					type: string
+				qty:
+					type: integer
+					minimum: 1
+		OrderResult:
+			type: object
+			properties:
+				totalNetBeforeDiscount:
+					type: number
+					format: decimal
+					example: 100000.00
+				totalDiscount:
+					type: number
+					format: decimal
+					example: 3000.00
+				totalNetAfterDiscount:
+					type: number
+					format: decimal
+					example: 97000.00
+				totalTax:
+					type: number
+					format: decimal
+					example: 1000.00
+				totalGross:
+					type: number
+					format: decimal
+					example: 107000
+				appliedLabels:
+					type: array
+					items:
+						type: string
+						enum: [VOLUME, MULTI_ITEM, HIGH_AMOUNT]
