@@ -32,6 +32,21 @@ public class OrderService {
 	  }
 
 	public OrderResult placeOrder(OrderRequest req) {
+		// TODO: guardの重複が増えたら validateRequest(...) に抽出
+		// qty ガードだけ（linesチェックは次サイクルで扱う）
+		for (var line : req.lines()) {                 // ※ anchorのNormal/Abnormalはlinesを渡してる前提
+			if (line.qty() <= 0) {
+				// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
+				throw new IllegalArgumentException("qty must be > 0");
+			}
+		}
+		
+		// 在庫呼び出し（例外は伝播）
+		  for (var line : req.lines()) {
+		    inventory.reserve(line.productId(), line.qty());
+		  }
+
+		// TODO: 金額計算が肥大したら Tax/Discount を純粋関数(or Money)へ
 		// まだ中身は実装してない（仮）
 		return new OrderResult(
 				BigDecimal.ZERO,

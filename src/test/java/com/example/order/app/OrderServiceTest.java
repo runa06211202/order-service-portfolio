@@ -86,7 +86,7 @@ class OrderServiceTest {
     	verifyNoInteractions(products, inventory, tax);
     }
 
-    @ParameterizedTest
+    @Test
     @Tag("anchor")
     void throwsWhenQtyNonPositive() {
     	OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, 
