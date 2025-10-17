@@ -292,9 +292,6 @@ class OrderServiceTest {
     void endToEnd_happyPath_returnsExpectedTotalsAndLabels() {
     	OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,List.of(new OrderRequest.Line("P001", 1)));
 
-    	    // 最小スタブ：例外を出さないようにだけ
-    	    doNothing().when(inventory).reserve(anyString(), anyInt());
-
     	    var result = sut.placeOrder(req);
 
     	    // いまは仮実装なので 0 で通す（錨は“通し線”を確保するのが目的）

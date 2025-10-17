@@ -32,8 +32,7 @@ public class OrderService {
 	  }
 
 	public OrderResult placeOrder(OrderRequest req) {
-		// TODO: guardの重複が増えたら validateRequest(...) に抽出
-		// qty ガードだけ（linesチェックは次サイクルで扱う）
+		// TODO: Guardが増えたら validateRequest(...) を導入（lines null/empty は次サイクル）
 		for (var line : req.lines()) {                 // ※ anchorのNormal/Abnormalはlinesを渡してる前提
 			if (line.qty() <= 0) {
 				// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
@@ -46,15 +45,15 @@ public class OrderService {
 		    inventory.reserve(line.productId(), line.qty());
 		  }
 
-		// TODO: 金額計算が肥大したら Tax/Discount を純粋関数(or Money)へ
+		// TODO: 金額計算が始まったら Money/Policy 抽出（丸め規約の分散を解消）
 		// まだ中身は実装してない（仮）
-		return new OrderResult(
-				BigDecimal.ZERO,
-				BigDecimal.ZERO,
-				BigDecimal.ZERO,
-				BigDecimal.ZERO,
-				BigDecimal.ZERO,
-				List.of() // 空の割引リスト
-				);
+		return emptyResult();
   }
+
+	private OrderResult emptyResult() {
+		return new OrderResult(
+				BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+				BigDecimal.ZERO, BigDecimal.ZERO, List.of()
+		);
+	}
 }
