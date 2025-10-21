@@ -106,6 +106,7 @@ class OrderServiceTest {
 
 		@Test
 		@Tag("anchor")
+		// TODO:RefでDisplayNameの誤記直す、というかguard確認被ってるので消すthrows_when_orderRequest_nullをanchorに
 		@DisplayName("Normal系錨テスト (処理フロー通し確認）")
 		void throwsWhenQtyNonPositive() {
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
@@ -481,6 +482,23 @@ class OrderServiceTest {
 
 	@Nested
 	class VerifyCalls {
+		@Test
+		void reservesInOrder_afterDiscounts_onlyOnceEach() {
+			// Given
+			var line1 = new OrderRequest.Line("A001", 2);
+			var line2 = new OrderRequest.Line("B002", 3);
+			var req = new OrderRequest("JP", null, List.of(line1, line2));
+
+			// When
+			sut.placeOrder(req);
+
+			// Then
+			InOrder inOrder = inOrder(inventory);
+	        inOrder.verify(inventory).reserve("A001", 2);
+	        inOrder.verify(inventory).reserve("B002", 3);
+	        inOrder.verifyNoMoreInteractions();
+		}
+
 		// 使われたIDだけ返すAnswer（price表）
 		private void stubProductsPriceTable(Map<String, String> table) {
 			when(products.findById(anyString())).thenAnswer(inv -> {
