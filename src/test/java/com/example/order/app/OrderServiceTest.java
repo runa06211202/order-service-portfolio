@@ -485,6 +485,8 @@ class OrderServiceTest {
 	class VerifyCalls {
 		@Test
 		void reservesInOrder_afterDiscounts_onlyOnceEach() {
+			// TODO: 割引・税計算導入時は reserveInventory() の前に呼び出すこと
+			// verify order: validate → discount → tax → inventory → save
 			// Given
 			var line1 = new OrderRequest.Line("A001", 2);
 			var line2 = new OrderRequest.Line("B002", 3);
