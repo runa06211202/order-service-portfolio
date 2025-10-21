@@ -41,10 +41,8 @@ public class OrderService {
 			}
 		}
 		
-		// 在庫呼び出し（例外は伝播）
-		  for (var line : req.lines()) {
-		    inventory.reserve(line.productId(), line.qty());
-		  }
+		// 在庫呼び出しをメソッド化
+		  reserveInventory(req.lines());
 
 		// TODO: 金額計算が始まったら Money/Policy 抽出（丸め規約の分散を解消）
 		// まだ中身は実装してない（仮）
@@ -66,5 +64,12 @@ public class OrderService {
 	        throw new IllegalArgumentException("lines must not be null");
 	    if (req.lines().isEmpty())
 	        throw new IllegalArgumentException("lines must not be empty");
+	}
+	
+	// 在庫呼び出し部分を抽出
+	private void reserveInventory(List<OrderRequest.Line> lines) {
+		for (var line : lines) {
+		    inventory.reserve(line.productId(), line.qty());
+		  }
 	}
 }
