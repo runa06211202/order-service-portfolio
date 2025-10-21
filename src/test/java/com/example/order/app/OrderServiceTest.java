@@ -107,12 +107,14 @@ class OrderServiceTest {
 		@Test
 		@Tag("anchor")
 		@DisplayName("Normal系錨テスト (処理フロー通し確認）")
-		void throwsWhenQtyNonPositive() {
+		void throws_when_qty_nonPositive() {
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
 					List.of(new OrderRequest.Line("P001", 0)) // 0 でガード
 			);
 			assertThatThrownBy(() -> sut.placeOrder(req))
 					.isInstanceOf(IllegalArgumentException.class);
+			// Guardが発動した場合は副作用を起こさない（ドメインの安全保証）
+			verifyNoInteractions(products, inventory, tax);
 		}
 
 		static Stream<String> blankStrings() {
@@ -481,6 +483,25 @@ class OrderServiceTest {
 
 	@Nested
 	class VerifyCalls {
+		@Test
+		void reservesInOrder_afterDiscounts_onlyOnceEach() {
+			// TODO: 割引・税計算導入時は reserveInventory() の前に呼び出すこと
+			// verify order: validate → discount → tax → inventory → save
+			// Given
+			var line1 = new OrderRequest.Line("A001", 2);
+			var line2 = new OrderRequest.Line("B002", 3);
+			var req = new OrderRequest("JP", null, List.of(line1, line2));
+
+			// When
+			sut.placeOrder(req);
+
+			// Then
+			InOrder inOrder = inOrder(inventory);
+			inOrder.verify(inventory).reserve("A001", 2);
+			inOrder.verify(inventory).reserve("B002", 3);
+			inOrder.verifyNoMoreInteractions();
+		}
+
 		// 使われたIDだけ返すAnswer（price表）
 		private void stubProductsPriceTable(Map<String, String> table) {
 			when(products.findById(anyString())).thenAnswer(inv -> {
