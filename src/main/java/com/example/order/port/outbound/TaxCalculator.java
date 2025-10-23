@@ -8,5 +8,5 @@ public interface TaxCalculator {
 
 	BigDecimal addTax(BigDecimal net, String region, RoundingMode mode);
 
-	Object calculate(BigDecimal any, String eq);
+	BigDecimal calculate(BigDecimal any, String eq);
 }

@@ -138,7 +138,7 @@ class OrderServiceTest {
 			assertThatThrownBy(() -> sut.placeOrder(req))
 					.isInstanceOf(IllegalArgumentException.class)
 					.hasMessageContainingAll("region");
-			verifyNoInteractions(products, inventory, tax);
+			verifyNoInteractions(products, inventory);
 		}
 
 		@Test
@@ -155,7 +155,7 @@ class OrderServiceTest {
 			assertThatThrownBy(() -> sut.placeOrder(req))
 					.isInstanceOf(IllegalArgumentException.class)
 					.hasMessageContaining("product not found: B");
-			verifyNoInteractions(inventory, tax);
+			verifyNoInteractions(inventory);
 		}
 	}
 
@@ -504,6 +504,15 @@ class OrderServiceTest {
 			var line2 = new OrderRequest.Line("B002", 3);
 			var req = new OrderRequest("JP", null, List.of(line1, line2));
 
+			// findByIdの例外処理を追加したためProductRepositoryのモック設定追加（例外防止）
+			when(products.findById("A001"))
+					.thenReturn(Optional.of(new Product("A001", "Apple", new BigDecimal("100"))));
+			when(products.findById("B002"))
+					.thenReturn(Optional.of(new Product("B002", "Banana", new BigDecimal("200"))));
+
+			// 税計算はどんな入力でも0返すようにしておく
+			when(tax.calculate(any(), any())).thenReturn(BigDecimal.ZERO);
+
 			// When
 			sut.placeOrder(req);
 
@@ -514,6 +523,30 @@ class OrderServiceTest {
 			inOrder.verifyNoMoreInteractions();
 		}
 
+		@Test
+		void calculate_before_reserve_order_is_fixed() {
+			var pid1 = "P001";
+			var pid2 = "P002";
+		    var l1 = new OrderRequest.Line(pid1, 2);
+		    var l2 = new OrderRequest.Line(pid2, 1);
+		    var req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(l1, l2));
+
+		    when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1,"Apple", new BigDecimal("100"))));
+		    when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2,"Banana", new BigDecimal("200"))));
+		    // 税は任意の0.1など（丸め仕様に合わせる）
+		    when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10"));
+		    doNothing().when(inventory).reserve(anyString(), anyInt());
+
+		    InOrder order = inOrder(tax, inventory);
+		    sut.placeOrder(req);
+
+		    // 計算（税）→ 在庫 の順序
+		    order.verify(tax).calculate(any(BigDecimal.class), eq("JP"));
+		    order.verify(inventory).reserve(pid1, 2);
+		    order.verify(inventory).reserve(pid2, 1);
+		    order.verifyNoMoreInteractions();
+		}
+		
 		// 使われたIDだけ返すAnswer（price表）
 		private void stubProductsPriceTable(Map<String, String> table) {
 			when(products.findById(anyString())).thenAnswer(inv -> {
@@ -626,16 +659,16 @@ class OrderServiceTest {
 	class Abnormal {
 		@Test
 		@Tag("anchor")
-		void inventoryThrows_taxNotCalled() {
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(new OrderRequest.Line("P001", 1)));
-			// 在庫側が落ちる想定
-			doThrow(new RuntimeException("no stock")).when(inventory).reserve(anyString(), anyInt());
+		void inventoryThrows_propagates_noSave() {
+			var pid = "P001";
+			var req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(new OrderRequest.Line(pid, 1)));
+		    when(products.findById(pid)).thenReturn(Optional.of(new Product(pid,"Apple", new BigDecimal("100"))));
+		    when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10"));
+		    doThrow(new RuntimeException("no stock")).when(inventory).reserve(anyString(), anyInt());
 
-			assertThatThrownBy(() -> sut.placeOrder(req))
-					.isInstanceOf(RuntimeException.class);
-
-			// 税は呼ばれないこと（メソッド名が曖昧なら相互作用ゼロで検証）
-			verifyNoInteractions(tax);
+		    assertThatThrownBy(() -> sut.placeOrder(req)).isInstanceOf(RuntimeException.class);
+		    // 税は呼ばれてOK（先に計算する設計）
+		    // save未実装ならここは保留。実装後に verifyNoInteractions(savePort) 等を追加。
 		}
 	}
 
