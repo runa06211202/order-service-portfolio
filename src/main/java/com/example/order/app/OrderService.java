@@ -1,8 +1,10 @@
 package com.example.order.app;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
+import com.example.order.domain.model.Product;
 import com.example.order.domain.policy.DiscountCapPolicy;
 import com.example.order.domain.policy.PercentCapPolicy;
 import com.example.order.dto.OrderRequest;
@@ -41,18 +43,24 @@ public class OrderService {
 		validateRequest(req);
 		validateQty(req.lines());
 
+		// --- 計算ステップ ---
+		BigDecimal netBeforeDiscount = calculateSubtotal(req);
+		BigDecimal discount = calculateDiscount(netBeforeDiscount); // 今は常に0
+		BigDecimal netAfterDiscount = netBeforeDiscount.subtract(discount);
+		BigDecimal taxAmount = calculateTax(netAfterDiscount, req.region());
+		BigDecimal gross = netAfterDiscount.add(taxAmount);
+
 		// 在庫呼び出しをメソッド化
 		reserveInventory(req.lines());
 
-		// TODO: 金額計算が始まったら Money/Policy 抽出（丸め規約の分散を解消）
-		// まだ中身は実装してない（仮）
-		return emptyResult();
-	}
-
-	private OrderResult emptyResult() {
 		return new OrderResult(
-				BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-				BigDecimal.ZERO, BigDecimal.ZERO, List.of());
+		        netBeforeDiscount,
+		        discount,
+		        netAfterDiscount,
+		        taxAmount,
+		        gross,
+		        List.of() // appliedDiscounts は後で拡張
+		    );
 	}
 
 	private void validateRequest(OrderRequest req) {
@@ -70,6 +78,29 @@ public class OrderService {
 			if (line.qty() <= 0)
 				throw new IllegalArgumentException("qty must be > 0");
 		}
+	}
+
+	private BigDecimal calculateSubtotal(OrderRequest req) {
+		return req.lines().stream()
+				.map(this::lineToAmount)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	// Optional<Product>の中身が空の場合IAEをThrow、行計算自体を行わない(ADR-003)
+	private BigDecimal lineToAmount(OrderRequest.Line line) {
+		Product p = products.findById(line.productId())
+				.orElseThrow(() -> new IllegalArgumentException(
+						"product not found: " + line.productId()));
+		return p.price().multiply(BigDecimal.valueOf(line.qty()));
+	}
+
+	private BigDecimal calculateDiscount(BigDecimal subtotal) {
+		return BigDecimal.ZERO; // TODO: クーポンなど導入時に拡張
+	}
+
+	private BigDecimal calculateTax(BigDecimal netAfterDiscount, String region) {
+		var rate = tax.calculate(netAfterDiscount, region);
+		return netAfterDiscount.multiply(rate).setScale(0, RoundingMode.DOWN); // 小数切捨て
 	}
 
 	// 在庫呼び出し部分を抽出
