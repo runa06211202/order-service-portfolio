@@ -47,7 +47,7 @@ public class OrderService {
 		BigDecimal taxAmount = calculateTax(netAfterDiscount, req.region());
 		BigDecimal gross = netAfterDiscount.add(taxAmount);
 
-		// 在庫呼び出しをメソッド化
+		// 在庫在庫確保は最後(ADR-006)
 		reserveInventory(req.lines());
 
 		return new OrderResult(
@@ -77,7 +77,7 @@ public class OrderService {
 		}
 	}
 
-	// 在庫可用性チェック
+	// 在庫可用性チェック(ADR-007)
 	private void ensureAvailability(List<OrderRequest.Line> lines) {
 	    for (var line : lines) {
 	        if (!inventory.checkAvailable(line.productId(), line.qty())) {
@@ -86,6 +86,7 @@ public class OrderService {
 	    }
 	}
 
+	// 小計計算
 	private BigDecimal calculateSubtotal(OrderRequest req) {
 		return req.lines().stream()
 				.map(this::lineToAmount)
@@ -100,16 +101,18 @@ public class OrderService {
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
 	}
 
+	// 割引処理
 	private BigDecimal calculateDiscount(BigDecimal subtotal) {
 		return BigDecimal.ZERO; // TODO: クーポンなど導入時に拡張
 	}
 
+	// 税計算
 	private BigDecimal calculateTax(BigDecimal netAfterDiscount, String region) {
 		var rate = tax.calculate(netAfterDiscount, region);
 		return netAfterDiscount.multiply(rate).setScale(0, RoundingMode.DOWN); // 小数切捨て
 	}
 
-	// 在庫呼び出し部分を抽出
+	// 在庫確保
 	private void reserveInventory(List<OrderRequest.Line> lines) {
 		for (var line : lines) {
 			inventory.reserve(line.productId(), line.qty());
