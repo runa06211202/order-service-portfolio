@@ -36,12 +36,9 @@ public class OrderService {
 
 	public OrderResult placeOrder(OrderRequest req) {
 
-		/*
-		 *  TODO: 割引や税計算を導入してもこの呼び出し順序を維持すること
-		 *  (validate → calculateDiscounts → calculateTax → reserveInventory → saveOrder)
-		 */
 		validateRequest(req);
 		validateQty(req.lines());
+		ensureAvailability(req.lines());     // ← 追加（ここで早期return）（ADR-007）
 
 		// --- 計算ステップ ---
 		BigDecimal netBeforeDiscount = calculateSubtotal(req);
@@ -78,6 +75,15 @@ public class OrderService {
 			if (line.qty() <= 0)
 				throw new IllegalArgumentException("qty must be > 0");
 		}
+	}
+
+	// 在庫可用性チェック
+	private void ensureAvailability(List<OrderRequest.Line> lines) {
+	    for (var line : lines) {
+	        if (!inventory.checkAvailable(line.productId(), line.qty())) {
+	            throw new RuntimeException("out of stock: " + line.productId());
+	        }
+	    }
 	}
 
 	private BigDecimal calculateSubtotal(OrderRequest req) {
