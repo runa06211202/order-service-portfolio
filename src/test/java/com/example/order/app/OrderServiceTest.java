@@ -670,6 +670,27 @@ class OrderServiceTest {
 		    // 税は呼ばれてOK（先に計算する設計）
 		    // save未実装ならここは保留。実装後に verifyNoInteractions(savePort) 等を追加。
 		}
+		@Test
+		@DisplayName("checkAvailable が false のとき、例外伝播＆reserve未呼び出し")
+		void availabilityFalse_throws_noReserveNoSave() {
+			var pid1 = "P001";
+			var pid2 = "P002";
+			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+			        new OrderRequest.Line(pid1, 1), new OrderRequest.Line(pid2, 1)
+			    ));
+			when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1,"Apple",  new BigDecimal("100"))));
+		    when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2,"Banana", new BigDecimal("200"))));
+		    when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10"));
+		    
+		    // ここはまだPortにcheckAvailableが無いので、この時点ではコンパイルをRedにしてOK
+		    when(inventory.checkAvailable("P001", 1)).thenReturn(true);
+		    when(inventory.checkAvailable("P002", 1)).thenReturn(false);
+
+		    assertThatThrownBy(() -> sut.placeOrder(req)).isInstanceOf(RuntimeException.class);
+
+		    // 可用性NGなら reserve は一切呼ばれない
+		    verify(inventory, never()).reserve(anyString(), anyInt());
+		}
 	}
 
 	@Nested
