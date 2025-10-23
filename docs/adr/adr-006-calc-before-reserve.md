@@ -84,6 +84,7 @@ validateRequest
 
 - 関連ADR
 	- [ADR-007: 在庫可用性チェック導入と呼び出し順序の再定義（availability→calculate→reserve）](docs/adr/adr-007-availability-check.md)
+
 ---
 
 この段階で副作用の順序を確定させ、  
