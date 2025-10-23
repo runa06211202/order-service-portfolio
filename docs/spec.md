@@ -27,4 +27,4 @@
 - 税計算時の丸めモードは mode 指定（null時は HALF_UP）
 
 ## 呼び出し順序
-find → 割引計算 → reserve×n → taxCalculator.addTax
+validate → checkAvailable → discountCalc → taxCalc → reserve
