@@ -163,6 +163,7 @@ class OrderServiceTest {
 
 	@Nested
 	class OrderServiceNormalTest {
+
 		@Test
 		@Disabled
 		@DisplayName("N-1-1: 割引適用無し")
@@ -318,6 +319,7 @@ class OrderServiceTest {
 
 		@Test
 		@Tag("anchor")
+		@DisplayName("placeOrder通しhappyパス確認")
 		void endToEnd_happyPath_returnsExpectedTotalsAndLabels() {
 			var pid1 = "P001";
 			var pid2 = "P002";
@@ -419,7 +421,8 @@ class OrderServiceTest {
 		@Disabled
 		@DisplayName("T-1-2: MULTI_ITEM割引適用閾値")
 		@MethodSource("multiItemDiscountThresholds")
-		void placeOrder_calc_whenMultiItemBoundary_kinds2_3_4(List<Line> lines, BigDecimal expectedNet, BigDecimal expectedDiscount,
+		void placeOrder_calc_whenMultiItemBoundary_kinds2_3_4(List<Line> lines, BigDecimal expectedNet,
+				BigDecimal expectedDiscount,
 				BigDecimal expectedAfterDiscount, List<DiscountType> expectedLabels) {
 			FakeProductRepository fakeRepo = new FakeProductRepository(PRICE);
 
@@ -455,7 +458,8 @@ class OrderServiceTest {
 		@Disabled
 		@DisplayName("T-1-3: HIGH_AMOUNT割引適用閾値")
 		@MethodSource("highAmountDiscountThresholds")
-		void placeOrder_calc_whenHighAmountBoundary_99999_100000_100001(BigDecimal price, List<Line> lines, BigDecimal expectedNet,
+		void placeOrder_calc_whenHighAmountBoundary_99999_100000_100001(BigDecimal price, List<Line> lines,
+				BigDecimal expectedNet,
 				BigDecimal expectedDiscount, BigDecimal expectedAfterDiscount, List<DiscountType> expectedLabels) {
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
 			// Given: Product.price = 99999/100000/100001
@@ -735,5 +739,37 @@ class OrderServiceTest {
 
 			}
 		}
+
+		@Nested
+		class DiscountRules {
+			@Test
+			@Tag("anchor")
+			@DisplayName("VOLUME割引anchorテスト")
+			void appliesVolumeDiscount_whenQtyAtLeast10() {
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var l1 = new OrderRequest.Line(pid1, 10);
+				var l2 = new OrderRequest.Line(pid2, 5);
+				var rate = new BigDecimal("0.10");
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(l1, l2));
+
+				when(products.findById(pid1))
+						.thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
+				when(products.findById(pid2))
+						.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
+				when(tax.calculate(any(), eq("JP"))).thenReturn(rate);
+				
+				OrderResult result = sut.placeOrder(req);
+				
+				// 各行：
+		        // P001: 100×10 = 1000 → 5%OFF → 950
+		        // P002: 200×5 = 1000
+		        // 小計(割引後)=1950, 割引前=2000
+		        assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2000");
+		        assertThat(result.totalDiscount()).isEqualByComparingTo("50");
+		        assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");
+			}
+		}
+
 	}
 }
