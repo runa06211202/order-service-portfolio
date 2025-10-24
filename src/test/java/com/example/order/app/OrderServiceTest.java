@@ -27,7 +27,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.order.domain.model.Product;
-import com.example.order.domain.policy.PercentCapPolicy;
 import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderRequest.Line;
@@ -713,31 +712,6 @@ class OrderServiceTest {
 				// ラベルは Cap を追加しない（適用済み割引の記録のみ）
 				// assertThat(result.appliedDiscounts()).doesNotContain(DiscountType.valueOf("CAP"));
 			}
-
-			@Test
-			@Disabled
-			@DisplayName("割引ポリシー確認テスト")
-			void placeOrder_caps_whenSetCapPolicy() {
-				// Given: Line("A", 15)("B", 5)
-				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
-						List.of(new Line("A", 15), new Line("B", 5)));
-				when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("100"))));
-				when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("200"))));
-
-				// Given: PersentPolicy = 0.02
-				OrderService sut = new OrderService(products, inventory, tax,
-						new PercentCapPolicy(new BigDecimal("0.02")));
-
-				// When: sut.placeOrder(req)
-				OrderResult result = sut.placeOrder(req);
-
-				// Then: totalNetBeforeDiscount = 2500.00, totalDiscount = 50.00, totalNetAfterDiscount = 2450.00, appliedDiscounts = [VOLUME}
-				assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2500.00");
-				assertThat(result.totalDiscount()).isEqualByComparingTo("50.00");
-				assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("2450.00");
-				assertThat(result.appliedDiscounts()).containsExactlyInAnyOrderElementsOf(List.of(DiscountType.VOLUME));
-
-			}
 		}
 
 		@Nested
@@ -770,7 +744,7 @@ class OrderServiceTest {
 		        // 小計(割引後)=1950, 割引前=2000
 		        assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2000");
 		        assertThat(result.totalDiscount()).isEqualByComparingTo("50");
-		        assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");
+		        assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");// ADR-008
 			}
 		}
 

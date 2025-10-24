@@ -5,34 +5,29 @@ import java.math.RoundingMode;
 import java.util.List;
 
 import com.example.order.domain.model.Product;
-import com.example.order.domain.policy.DiscountCapPolicy;
-import com.example.order.domain.policy.PercentCapPolicy;
+import com.example.order.domain.policy.DiscountPolicy;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderResult;
+import com.example.order.engine.DiscountEngine;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.VolumeDiscount;
 
 public class OrderService {
 
 	private final ProductRepository products;
 	private final InventoryService inventory;
 	private final TaxCalculator tax;
-	private final PercentCapPolicy policy;
-	private final DiscountCapPolicy capPolicy;
+	// 追加：割引ポリシー群（今は Volume のみ）
+    private final List<DiscountPolicy> discountPolicies;
 
-	public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax,
-			DiscountCapPolicy capPolicy) {
-		this.products = products;
-		this.inventory = inventory;
-		this.tax = tax;
-		this.policy = null;
-		this.capPolicy = capPolicy;
-	}
-
-	public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
-		this(products, inventory, tax, new PercentCapPolicy(new BigDecimal("0.30"))); // デフォルト30%
-	}
+    public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
+        this.products = products;
+        this.inventory = inventory;
+        this.tax = tax;
+        this.discountPolicies = List.of(new VolumeDiscount());
+    }
 
 	public OrderResult placeOrder(OrderRequest req) {
 
@@ -42,7 +37,11 @@ public class OrderService {
 
 		// --- 計算ステップ ---
 		BigDecimal totalNetBeforeDiscount = calculateSubtotal(req);
-		BigDecimal totalDiscount = calculateDiscount(req); // 今はVOLUME割引のみ算出
+		// TODO: 次サイクルで DiscountPolicy を追加：
+		// - MultiItemDiscount (distinct kinds >= 3 ⇒ 2%)
+		// - HighAmountDiscount (after previous discounts >= 100000 ⇒ 3%)
+		// - CapPolicy (sum of discounts <= 30% of subtotal)
+		BigDecimal totalDiscount = DiscountEngine.applyAll(discountPolicies, req, products);
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
 		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
 		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
@@ -53,7 +52,7 @@ public class OrderService {
 		return new OrderResult(
 				totalNetBeforeDiscount,
 				totalDiscount,
-				totalNetAfterDiscount,
+				totalNetAfterDiscount, // ADR-008
 				totalTax,
 				totalGross,
 				List.of() // appliedDiscounts は後で拡張
