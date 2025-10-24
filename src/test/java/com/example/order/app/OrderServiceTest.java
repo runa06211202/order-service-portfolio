@@ -748,11 +748,14 @@ class OrderServiceTest {
 			void appliesVolumeDiscount_whenQtyAtLeast10() {
 				var pid1 = "P001";
 				var pid2 = "P002";
-				var l1 = new OrderRequest.Line(pid1, 10);
-				var l2 = new OrderRequest.Line(pid2, 5);
+				var qty1 = 10;
+				var qty2 = 5;
+				var l1 = new OrderRequest.Line(pid1, qty1);
+				var l2 = new OrderRequest.Line(pid2, qty2);
 				var rate = new BigDecimal("0.10");
 				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(l1, l2));
-
+				when(inventory.checkAvailable(pid1, qty1)).thenReturn(true);
+				when(inventory.checkAvailable(pid2, qty2)).thenReturn(true);
 				when(products.findById(pid1))
 						.thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
 				when(products.findById(pid2))
