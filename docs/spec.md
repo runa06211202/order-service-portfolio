@@ -7,7 +7,7 @@
 
 ## 入出力
 入力: lines, region, mode  
-出力: totalNetBeforeDiscount, totalDiscount, totalTax, totalGross, appliedLabels
+出力: totalNetBeforeDiscount, totalDiscount, totalNetAfterDiscount, totalTax, totalGross, appliedLabels
 
 ## 割引ルール（順序固定）
 1. VOLUME: 各行 qty≥10 の行に 5% OFF  
