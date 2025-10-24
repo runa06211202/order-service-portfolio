@@ -100,25 +100,6 @@ public class OrderService {
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
 	}
 
-	// 割引処理
-	private BigDecimal calculateDiscount(OrderRequest req) {
-		BigDecimal discount = BigDecimal.ZERO;
-
-		// VOLUME割引
-		for (var line : req.lines()) {
-			Product p = products.findById(line.productId())
-					.orElseThrow(() -> new IllegalArgumentException("product not found: " + line.productId()));
-			BigDecimal lineAmount = p.price().multiply(BigDecimal.valueOf(line.qty()));
-
-			// qty>=10 の行は5%OFF
-			if (line.qty() >= 10) {
-				discount = discount.add(lineAmount.multiply(new BigDecimal("0.05")));
-			}
-		}
-
-		return discount;
-	}
-
 	// 税計算
 	private BigDecimal calculateTax(BigDecimal netAfterDiscount, String region) {
 		var rate = tax.calculate(netAfterDiscount, region);
