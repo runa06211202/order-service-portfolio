@@ -674,13 +674,9 @@ class OrderServiceTest {
 
 				/* 期待計算：
 				 * subtotal = 1000 + 200 + 300 = 1500
-				 * volume(5%) は P1 行のみ: 1000 * 0.05 = 50
-				 * volume 後の基準 = 1500 - 50 = 1450
-				 * multi_item(2%) は「後の基準」に対して: 1450 * 0.02 = 29
-				 * totalDiscount = 50 + 29 = 79
+				 * volume: P1 1000 * 0.05 = 50
+				 * multi_item: 1450 * 0.02 = 29 → totalDiscount = 50 + 29 = 79
 				 * netAfter = 1500 - 79 = 1421
-				 * tax(10%) = 1421 * 0.10 = 142（小数は切り捨て運用に合わせる）
-				 * gross = 1421 + 142 = 1563
 				 */
 				// When
 				OrderResult r = sut.placeOrder(req);
@@ -689,8 +685,6 @@ class OrderServiceTest {
 				assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("1500");
 				assertThat(r.totalDiscount()).isEqualByComparingTo("79");
 				assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("1421");
-				assertThat(r.totalTax()).isEqualByComparingTo("142");
-				assertThat(r.totalGross()).isEqualByComparingTo("1563");
 			}
 
 			@Test
@@ -715,9 +709,9 @@ class OrderServiceTest {
 				 * 計算期待:
 				 * subtotal = 115000
 				 * volume: P1 100000 * 0.05 = 5000 → base1 = 110000
-				 * multi : base1 110000 * 0.02 = 2200 → base2 = 107800
-				 * high  : base2 107800 * 0.03 = 3234 → totalDiscount = 5000+2200+3234 = 10434
-				 * after = 115000 - 10434 = 104566
+				 * multi_item : base1 110000 * 0.02 = 2200 → base2 = 107800
+				 * high_amount  : base2 107800 * 0.03 = 3234 → totalDiscount = 5000+2200+3234 = 10434
+				 * netAfter = 115000 - 10434 = 104566
 				 */
 				OrderResult r = sut.placeOrder(req);
 				

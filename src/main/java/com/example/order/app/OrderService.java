@@ -45,8 +45,6 @@ public class OrderService {
 		// --- 計算ステップ ---
 		BigDecimal totalNetBeforeDiscount = calculateSubtotal(req);
 		// TODO: 次サイクルで DiscountPolicy を追加：
-		// - MultiItemDiscount (distinct kinds >= 3 ⇒ 2%)
-		// - HighAmountDiscount (after previous discounts >= 100000 ⇒ 3%)
 		// - CapPolicy (sum of discounts <= 30% of subtotal)
 		BigDecimal totalDiscount = DiscountEngine.applyInOrder(discountPolicies, req, products, totalNetBeforeDiscount);
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
