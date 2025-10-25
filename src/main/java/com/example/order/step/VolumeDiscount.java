@@ -11,7 +11,7 @@ public class VolumeDiscount implements DiscountPolicy {
 	private static final BigDecimal RATE = new BigDecimal("0.05");
 
 	@Override
-	public BigDecimal discount(OrderRequest req, ProductRepository products) {
+	public BigDecimal discount(OrderRequest req, ProductRepository products, BigDecimal baseAfterPrevious) {
 		BigDecimal total = BigDecimal.ZERO;
 
 		for (var line : req.lines()) {

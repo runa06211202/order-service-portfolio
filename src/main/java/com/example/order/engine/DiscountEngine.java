@@ -11,14 +11,22 @@ public class DiscountEngine {
 	private DiscountEngine() {
 	}
 
-	public static BigDecimal applyAll(List<DiscountPolicy> policies,OrderRequest req,ProductRepository products) {
-		BigDecimal sum = BigDecimal.ZERO;
-		for (var policy : policies) {
-			BigDecimal d = policy.discount(req, products);
-			if (d.signum() > 0) {
-				sum = sum.add(d);
-			}
-		}
-		return sum;
+	/*
+	 * 順序依存
+	 * 次ポリシーは全ポリシーの割引金額分を「引いた後」を基準に計算
+	 */
+	public static BigDecimal applyInOrder(List<DiscountPolicy> policies,OrderRequest req,ProductRepository products, BigDecimal subtotal) {
+		BigDecimal total = BigDecimal.ZERO;
+	    BigDecimal base  = subtotal;
+
+	    for (var p : policies) {
+	        BigDecimal d = p.discount(req, products, base);
+	        if (d.signum() > 0) {
+	          total = total.add(d);
+	          base  = base.subtract(d); // 
+	        }
+	      }
+		return total;
 	}
+
 }

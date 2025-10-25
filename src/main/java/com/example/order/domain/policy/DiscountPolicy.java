@@ -7,8 +7,9 @@ import com.example.order.port.outbound.ProductRepository;
 
 public interface DiscountPolicy {
 	/**
-     * このポリシーが適用する割引額（>= 0）。
-     * ここでは副作用なし（純粋計算）を前提にする。
-     */
-    BigDecimal discount(OrderRequest req, ProductRepository products);
+	 * baseAfterPrevious: 直前までの割引を反映した基準金額（この金額に対して本ポリシーを計算）
+	 * 返り値: 本ポリシーで適用する割引「額」（>=0）
+	 * 純粋計算・副作用無し
+	 */
+	BigDecimal discount(OrderRequest req,ProductRepository products,BigDecimal baseAfterPrevious);
 }
