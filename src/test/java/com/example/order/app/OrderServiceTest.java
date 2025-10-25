@@ -33,6 +33,9 @@ import com.example.order.dto.OrderResult;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.HighAmountDiscount;
+import com.example.order.step.MultiItemDiscount;
+import com.example.order.step.VolumeDiscount;
 
 @ExtendWith(MockitoExtension.class)
 /**
@@ -714,12 +717,88 @@ class OrderServiceTest {
 				 * netAfter = 115000 - 10434 = 104566
 				 */
 				OrderResult r = sut.placeOrder(req);
-				
+
 				assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("115000");
-			    assertThat(r.totalDiscount()).isEqualByComparingTo("10434");
-			    assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("104566");
+				assertThat(r.totalDiscount()).isEqualByComparingTo("10434");
+				assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("104566");
 			}
 
+			@Test
+			@DisplayName("cap未発動確認テスト(30％固定)")
+			void cap_limits_total_discount_to_30_percent_of_subtotal() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line(pid1, 10), // 量割対象
+						new OrderRequest.Line(pid2, 1),
+						new OrderRequest.Line(pid3, 1)));
+
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("10000")))); // 10000*10=100000
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000")))); // 10000
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				// 税はこのサイクルの観点外。スタブ不要（到達しても検証しない）
+
+				/*
+				 * 期待値（Cap未発動のはず）
+				 * subtotal = 115000
+				 * volume  = 100000 * 0.05 = 5000
+				 * multi   = base1 110000 * 0.02 = 2200
+				 * high    = base2 107800 * 0.03 = 3234
+				 * sum     = 5000 + 2200 + 3234 = 10434  （30% cap は 34500、未到達）
+				 */
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// Then
+				assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("115000");
+				assertThat(r.totalDiscount()).isEqualByComparingTo("10434"); // Cap未発動
+				assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("104566");
+				// 税・総額は別サイクルで検証
+			}
+
+			@Test
+			@DisplayName("cap確認テスト(capを意図的に下げて動作を検証)")
+			void cap_is_configurable_when_policy_injected() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line(pid1, 10), // 量割対象
+						new OrderRequest.Line(pid2, 1),
+						new OrderRequest.Line(pid3, 1)));
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("10000")))); // 10000*10=100000
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000")))); // 10000
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+
+				// ポリシー列を明示注入（既定の 30% ではなく 5% にする）
+				var customPolicies = List.of(
+						new VolumeDiscount(), // 1. VOLUME
+						new MultiItemDiscount(), // 2. MULTI_ITEM
+						new HighAmountDiscount(), // 3. HIGH_AMOUNT
+						new CapPolicy(new BigDecimal("0.05")) // 4. CAP (5%)
+				);
+				var sutWithCap5 = new OrderService(products, inventory, tax, customPolicies);
+				
+				/*
+				 * 期待値（素の合算割引 10434 を 5% cap で締める）
+				 * subtotal = 115000
+				 * cap(5%)  = 115000 * 0.05 = 5750
+				 */
+		        // When
+		        OrderResult r = sutWithCap5.placeOrder(req);
+		        
+		        // Then
+		        assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("115000");
+		        assertThat(r.totalDiscount()).isEqualByComparingTo("5750");      // Cap発動で 5% に丸め込まれる
+		        assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("109250");
+			}
 		}
 
 	}
