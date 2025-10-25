@@ -12,6 +12,7 @@ import com.example.order.engine.DiscountEngine;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.HighAmountDiscount;
 import com.example.order.step.MultiItemDiscount;
 import com.example.order.step.VolumeDiscount;
 
@@ -29,8 +30,9 @@ public class OrderService {
 		this.tax = tax;
 		this.discountPolicies = List.of(
 				new VolumeDiscount(), // 1. VOLUME
-				new MultiItemDiscount() // 2. MULTI_ITEM
-		// HighAmount と Cap は次サイクルで挿入
+				new MultiItemDiscount(), // 2. MULTI_ITEM
+				new HighAmountDiscount()   // 3. HIGH_AMOUNT ← ここで追加
+		// Cap は次サイクルで挿入
 		);
 	}
 
