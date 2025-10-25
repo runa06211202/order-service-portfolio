@@ -33,6 +33,7 @@ import com.example.order.dto.OrderResult;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.CapPolicy;
 import com.example.order.step.HighAmountDiscount;
 import com.example.order.step.MultiItemDiscount;
 import com.example.order.step.VolumeDiscount;
@@ -740,7 +741,7 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				// 税はこのサイクルの観点外。スタブ不要（到達しても検証しない）
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				/*
 				 * 期待値（Cap未発動のはず）
@@ -776,6 +777,7 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				// ポリシー列を明示注入（既定の 30% ではなく 5% にする）
 				var customPolicies = List.of(
@@ -784,7 +786,7 @@ class OrderServiceTest {
 						new HighAmountDiscount(), // 3. HIGH_AMOUNT
 						new CapPolicy(new BigDecimal("0.05")) // 4. CAP (5%)
 				);
-				var sutWithCap5 = new OrderService(products, inventory, tax, customPolicies);
+				OrderService sutWithCap5 = new OrderService(products, inventory, tax, customPolicies);
 				
 				/*
 				 * 期待値（素の合算割引 10434 を 5% cap で締める）
