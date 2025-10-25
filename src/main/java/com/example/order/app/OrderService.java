@@ -12,6 +12,7 @@ import com.example.order.engine.DiscountEngine;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.MultiItemDiscount;
 import com.example.order.step.VolumeDiscount;
 
 public class OrderService {
@@ -20,14 +21,18 @@ public class OrderService {
 	private final InventoryService inventory;
 	private final TaxCalculator tax;
 	// 追加：割引ポリシー群（今は Volume のみ）
-    private final List<DiscountPolicy> discountPolicies;
+	private final List<DiscountPolicy> discountPolicies;
 
-    public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
-        this.products = products;
-        this.inventory = inventory;
-        this.tax = tax;
-        this.discountPolicies = List.of(new VolumeDiscount());
-    }
+	public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
+		this.products = products;
+		this.inventory = inventory;
+		this.tax = tax;
+		this.discountPolicies = List.of(
+				new VolumeDiscount(), // 1. VOLUME
+				new MultiItemDiscount() // 2. MULTI_ITEM
+		// HighAmount と Cap は次サイクルで挿入
+		);
+	}
 
 	public OrderResult placeOrder(OrderRequest req) {
 
@@ -41,8 +46,9 @@ public class OrderService {
 		// - MultiItemDiscount (distinct kinds >= 3 ⇒ 2%)
 		// - HighAmountDiscount (after previous discounts >= 100000 ⇒ 3%)
 		// - CapPolicy (sum of discounts <= 30% of subtotal)
-		BigDecimal totalDiscount = DiscountEngine.applyAll(discountPolicies, req, products);
+		BigDecimal totalDiscount = DiscountEngine.applyInOrder(discountPolicies, req, products, totalNetBeforeDiscount);
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
+
 		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
 		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
 

@@ -764,6 +764,9 @@ class OrderServiceTest {
 						new OrderRequest.Line(pid2, qty2),
 						new OrderRequest.Line(pid3, qty3)));
 
+				when(inventory.checkAvailable(pid1, qty1)).thenReturn(true);
+				when(inventory.checkAvailable(pid2, qty2)).thenReturn(true);
+				when(inventory.checkAvailable(pid3, qty3)).thenReturn(true);
 				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("100")))); // 100*10=1000
 				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("200")))); // 200*1=200
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("300")))); // 300*1=300
