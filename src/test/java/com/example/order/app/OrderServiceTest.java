@@ -27,7 +27,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.order.domain.model.Product;
-import com.example.order.domain.policy.PercentCapPolicy;
 import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderRequest.Line;
@@ -163,6 +162,7 @@ class OrderServiceTest {
 
 	@Nested
 	class OrderServiceNormalTest {
+
 		@Test
 		@Disabled
 		@DisplayName("N-1-1: 割引適用無し")
@@ -318,6 +318,7 @@ class OrderServiceTest {
 
 		@Test
 		@Tag("anchor")
+		@DisplayName("placeOrder通しhappyパス確認")
 		void endToEnd_happyPath_returnsExpectedTotalsAndLabels() {
 			var pid1 = "P001";
 			var pid2 = "P002";
@@ -419,7 +420,8 @@ class OrderServiceTest {
 		@Disabled
 		@DisplayName("T-1-2: MULTI_ITEM割引適用閾値")
 		@MethodSource("multiItemDiscountThresholds")
-		void placeOrder_calc_whenMultiItemBoundary_kinds2_3_4(List<Line> lines, BigDecimal expectedNet, BigDecimal expectedDiscount,
+		void placeOrder_calc_whenMultiItemBoundary_kinds2_3_4(List<Line> lines, BigDecimal expectedNet,
+				BigDecimal expectedDiscount,
 				BigDecimal expectedAfterDiscount, List<DiscountType> expectedLabels) {
 			FakeProductRepository fakeRepo = new FakeProductRepository(PRICE);
 
@@ -455,7 +457,8 @@ class OrderServiceTest {
 		@Disabled
 		@DisplayName("T-1-3: HIGH_AMOUNT割引適用閾値")
 		@MethodSource("highAmountDiscountThresholds")
-		void placeOrder_calc_whenHighAmountBoundary_99999_100000_100001(BigDecimal price, List<Line> lines, BigDecimal expectedNet,
+		void placeOrder_calc_whenHighAmountBoundary_99999_100000_100001(BigDecimal price, List<Line> lines,
+				BigDecimal expectedNet,
 				BigDecimal expectedDiscount, BigDecimal expectedAfterDiscount, List<DiscountType> expectedLabels) {
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
 			// Given: Product.price = 99999/100000/100001
@@ -709,31 +712,41 @@ class OrderServiceTest {
 				// ラベルは Cap を追加しない（適用済み割引の記録のみ）
 				// assertThat(result.appliedDiscounts()).doesNotContain(DiscountType.valueOf("CAP"));
 			}
+		}
 
+		@Nested
+		class DiscountRules {
 			@Test
-			@Disabled
-			@DisplayName("割引ポリシー確認テスト")
-			void placeOrder_caps_whenSetCapPolicy() {
-				// Given: Line("A", 15)("B", 5)
-				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
-						List.of(new Line("A", 15), new Line("B", 5)));
-				when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("100"))));
-				when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("200"))));
-
-				// Given: PersentPolicy = 0.02
-				OrderService sut = new OrderService(products, inventory, tax,
-						new PercentCapPolicy(new BigDecimal("0.02")));
-
-				// When: sut.placeOrder(req)
+			@Tag("anchor")
+			@DisplayName("VOLUME割引anchorテスト")
+			void appliesVolumeDiscount_whenQtyAtLeast10() {
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var qty1 = 10;
+				var qty2 = 5;
+				var l1 = new OrderRequest.Line(pid1, qty1);
+				var l2 = new OrderRequest.Line(pid2, qty2);
+				var rate = new BigDecimal("0.10");
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(l1, l2));
+				when(inventory.checkAvailable(pid1, qty1)).thenReturn(true);
+				when(inventory.checkAvailable(pid2, qty2)).thenReturn(true);
+				when(products.findById(pid1))
+						.thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
+				when(products.findById(pid2))
+						.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
+				when(tax.calculate(any(), eq("JP"))).thenReturn(rate);
+				
 				OrderResult result = sut.placeOrder(req);
-
-				// Then: totalNetBeforeDiscount = 2500.00, totalDiscount = 50.00, totalNetAfterDiscount = 2450.00, appliedDiscounts = [VOLUME}
-				assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2500.00");
-				assertThat(result.totalDiscount()).isEqualByComparingTo("50.00");
-				assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("2450.00");
-				assertThat(result.appliedDiscounts()).containsExactlyInAnyOrderElementsOf(List.of(DiscountType.VOLUME));
-
+				
+				// 各行：
+		        // P001: 100×10 = 1000 → 5%OFF → 950
+		        // P002: 200×5 = 1000
+		        // 小計(割引後)=1950, 割引前=2000
+		        assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2000");
+		        assertThat(result.totalDiscount()).isEqualByComparingTo("50");
+		        assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");// ADR-008
 			}
 		}
+
 	}
 }

@@ -5,59 +5,58 @@ import java.math.RoundingMode;
 import java.util.List;
 
 import com.example.order.domain.model.Product;
-import com.example.order.domain.policy.DiscountCapPolicy;
-import com.example.order.domain.policy.PercentCapPolicy;
+import com.example.order.domain.policy.DiscountPolicy;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderResult;
+import com.example.order.engine.DiscountEngine;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
+import com.example.order.step.VolumeDiscount;
 
 public class OrderService {
 
 	private final ProductRepository products;
 	private final InventoryService inventory;
 	private final TaxCalculator tax;
-	private final PercentCapPolicy policy;
-	private final DiscountCapPolicy capPolicy;
+	// 追加：割引ポリシー群（今は Volume のみ）
+    private final List<DiscountPolicy> discountPolicies;
 
-	public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax,
-			DiscountCapPolicy capPolicy) {
-		this.products = products;
-		this.inventory = inventory;
-		this.tax = tax;
-		this.policy = null;
-		this.capPolicy = capPolicy;
-	}
-
-	public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
-		this(products, inventory, tax, new PercentCapPolicy(new BigDecimal("0.30"))); // デフォルト30%
-	}
+    public OrderService(ProductRepository products, InventoryService inventory, TaxCalculator tax) {
+        this.products = products;
+        this.inventory = inventory;
+        this.tax = tax;
+        this.discountPolicies = List.of(new VolumeDiscount());
+    }
 
 	public OrderResult placeOrder(OrderRequest req) {
 
 		validateRequest(req);
 		validateQty(req.lines());
-		ensureAvailability(req.lines());     // ← 追加（ここで早期return）（ADR-007）
+		ensureAvailability(req.lines()); // ← 追加（ここで早期return）（ADR-007）
 
 		// --- 計算ステップ ---
-		BigDecimal netBeforeDiscount = calculateSubtotal(req);
-		BigDecimal discount = calculateDiscount(netBeforeDiscount); // 今は常に0
-		BigDecimal netAfterDiscount = netBeforeDiscount.subtract(discount);
-		BigDecimal taxAmount = calculateTax(netAfterDiscount, req.region());
-		BigDecimal gross = netAfterDiscount.add(taxAmount);
+		BigDecimal totalNetBeforeDiscount = calculateSubtotal(req);
+		// TODO: 次サイクルで DiscountPolicy を追加：
+		// - MultiItemDiscount (distinct kinds >= 3 ⇒ 2%)
+		// - HighAmountDiscount (after previous discounts >= 100000 ⇒ 3%)
+		// - CapPolicy (sum of discounts <= 30% of subtotal)
+		BigDecimal totalDiscount = DiscountEngine.applyAll(discountPolicies, req, products);
+		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
+		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
+		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
 
 		// 在庫在庫確保は最後(ADR-006)
 		reserveInventory(req.lines());
 
 		return new OrderResult(
-		        netBeforeDiscount,
-		        discount,
-		        netAfterDiscount,
-		        taxAmount,
-		        gross,
-		        List.of() // appliedDiscounts は後で拡張
-		    );
+				totalNetBeforeDiscount,
+				totalDiscount,
+				totalNetAfterDiscount, // ADR-008
+				totalTax,
+				totalGross,
+				List.of() // appliedDiscounts は後で拡張
+		);
 	}
 
 	private void validateRequest(OrderRequest req) {
@@ -79,11 +78,11 @@ public class OrderService {
 
 	// 在庫可用性チェック(ADR-007)
 	private void ensureAvailability(List<OrderRequest.Line> lines) {
-	    for (var line : lines) {
-	        if (!inventory.checkAvailable(line.productId(), line.qty())) {
-	            throw new RuntimeException("out of stock: " + line.productId());
-	        }
-	    }
+		for (var line : lines) {
+			if (!inventory.checkAvailable(line.productId(), line.qty())) {
+				throw new RuntimeException("out of stock: " + line.productId());
+			}
+		}
 	}
 
 	// 小計計算
@@ -99,11 +98,6 @@ public class OrderService {
 				.orElseThrow(() -> new IllegalArgumentException(
 						"product not found: " + line.productId()));
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
-	}
-
-	// 割引処理
-	private BigDecimal calculateDiscount(BigDecimal subtotal) {
-		return BigDecimal.ZERO; // TODO: クーポンなど導入時に拡張
 	}
 
 	// 税計算
