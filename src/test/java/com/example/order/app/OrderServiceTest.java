@@ -735,16 +735,59 @@ class OrderServiceTest {
 				when(products.findById(pid2))
 						.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
 				when(tax.calculate(any(), eq("JP"))).thenReturn(rate);
-				
+
 				OrderResult result = sut.placeOrder(req);
-				
+
 				// 各行：
-		        // P001: 100×10 = 1000 → 5%OFF → 950
-		        // P002: 200×5 = 1000
-		        // 小計(割引後)=1950, 割引前=2000
-		        assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2000");
-		        assertThat(result.totalDiscount()).isEqualByComparingTo("50");
-		        assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");// ADR-008
+				// P001: 100×10 = 1000 → 5%OFF → 950
+				// P002: 200×5 = 1000
+				// 小計(割引後)=1950, 割引前=2000
+				assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("2000");
+				assertThat(result.totalDiscount()).isEqualByComparingTo("50");
+				assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("1950");// ADR-008
+			}
+
+			@Test
+			@Tag("anchor")
+			@DisplayName("MULTI_ITEM割引anchorテスト")
+			void applies_multiItemDiscount_after_volume_in_order() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				var qty1 = 10;
+				var qty2 = 1;
+				var qty3 = 1;
+
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line(pid1, qty1),
+						new OrderRequest.Line(pid2, qty2),
+						new OrderRequest.Line(pid3, qty3)));
+
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("100")))); // 100*10=1000
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("200")))); // 200*1=200
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("300")))); // 300*1=300
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
+
+				/* 期待計算：
+				 * subtotal = 1000 + 200 + 300 = 1500
+				 * volume(5%) は P1 行のみ: 1000 * 0.05 = 50
+				 * volume 後の基準 = 1500 - 50 = 1450
+				 * multi_item(2%) は「後の基準」に対して: 1450 * 0.02 = 29
+				 * totalDiscount = 50 + 29 = 79
+				 * netAfter = 1500 - 79 = 1421
+				 * tax(10%) = 1421 * 0.10 = 142（小数は切り捨て運用に合わせる）
+				 * gross = 1421 + 142 = 1563
+				 */
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// Then
+				assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("1500");
+				assertThat(r.totalDiscount()).isEqualByComparingTo("79");
+				assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("1421");
+				assertThat(r.totalTax()).isEqualByComparingTo("142");
+				assertThat(r.totalGross()).isEqualByComparingTo("1563");
 			}
 		}
 
