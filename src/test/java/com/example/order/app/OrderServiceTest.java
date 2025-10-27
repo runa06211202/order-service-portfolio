@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.order.domain.model.Product;
+import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderRequest.Line;
 import com.example.order.dto.OrderResult;
@@ -787,19 +788,56 @@ class OrderServiceTest {
 						new CapPolicy(new BigDecimal("0.05")) // 4. CAP (5%)
 				);
 				OrderService sutWithCap5 = new OrderService(products, inventory, tax, customPolicies);
-				
+
 				/*
 				 * 期待値（素の合算割引 10434 を 5% cap で締める）
 				 * subtotal = 115000
 				 * cap(5%)  = 115000 * 0.05 = 5750
 				 */
-		        // When
-		        OrderResult r = sutWithCap5.placeOrder(req);
+				// When
+				OrderResult r = sutWithCap5.placeOrder(req);
+
+				// Then
+				assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("115000");
+				assertThat(r.totalDiscount()).isEqualByComparingTo("5750"); // Cap発動で 5% に丸め込まれる
+				assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("109250");
+			}
+		}
+
+		@Nested
+		class DiscountLabels {
+			@Test
+		    @Tag("anchor")
+			@DisplayName("割引ラベル確認anchorテスト")
+			void appliedDiscounts_reflects_all_triggered_discounts_in_order() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+			            new OrderRequest.Line(pid1, 10),
+			            new OrderRequest.Line(pid2, 1),
+			            new OrderRequest.Line(pid3, 1)
+			        ));
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1,"A", new BigDecimal("10000"))));
+		        when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2,"B", new BigDecimal("10000"))));
+		        when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3,"C", new BigDecimal("5000"))));
+		        when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+		        doNothing().when(inventory).reserve(anyString(), anyInt());
+		        when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 		        
-		        // Then
-		        assertThat(r.totalNetBeforeDiscount()).isEqualByComparingTo("115000");
-		        assertThat(r.totalDiscount()).isEqualByComparingTo("5750");      // Cap発動で 5% に丸め込まれる
-		        assertThat(r.totalNetAfterDiscount()).isEqualByComparingTo("109250");
+		        OrderResult r = sut.placeOrder(req);
+		        
+		     // ラベル順は Volume → MultiItem → HighAmount → Cap
+		        assertThat(r.appliedDiscounts())
+		            .containsExactly(
+		                DiscountType.VOLUME,
+		                DiscountType.MULTI_ITEM,
+		                DiscountType.HIGH_AMOUNT
+		            );
+
+		        // 金額は変わらない
+		        assertThat(r.totalDiscount()).isEqualByComparingTo("10434");
 			}
 		}
 
