@@ -3,6 +3,7 @@ package com.example.order.step;
 import java.math.BigDecimal;
 
 import com.example.order.domain.policy.DiscountPolicy;
+import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
@@ -18,5 +19,9 @@ public class HighAmountDiscount implements DiscountPolicy {
 			return baseAfterPrevious.multiply(RATE);
 		}
 		return BigDecimal.ZERO;
+	}
+	@Override
+	public DiscountType type() {
+	    return DiscountType.HIGH_AMOUNT;
 	}
 }

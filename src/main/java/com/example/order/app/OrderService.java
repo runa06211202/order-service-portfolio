@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.example.order.domain.model.Product;
 import com.example.order.domain.policy.DiscountPolicy;
+import com.example.order.dto.DiscountResult;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderResult;
 import com.example.order.engine.DiscountEngine;
@@ -57,7 +58,9 @@ public class OrderService {
 
 		// --- 計算ステップ ---
 		BigDecimal totalNetBeforeDiscount = calculateSubtotal(req);
-		BigDecimal totalDiscount = DiscountEngine.applyInOrder(discountPolicies, req, products, totalNetBeforeDiscount);
+		DiscountResult discountResult = DiscountEngine.applyInOrder(discountPolicies, req, products,
+				totalNetBeforeDiscount);
+		BigDecimal totalDiscount = discountResult.total();
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
 
 		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
@@ -72,8 +75,7 @@ public class OrderService {
 				totalNetAfterDiscount, // ADR-008
 				totalTax,
 				totalGross,
-				List.of() // appliedDiscounts は後で拡張
-		);
+				discountResult.applied());
 	}
 
 	private void validateRequest(OrderRequest req) {

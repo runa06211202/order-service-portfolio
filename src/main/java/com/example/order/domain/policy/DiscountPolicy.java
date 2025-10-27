@@ -2,6 +2,7 @@ package com.example.order.domain.policy;
 
 import java.math.BigDecimal;
 
+import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
@@ -12,4 +13,5 @@ public interface DiscountPolicy {
 	 * 純粋計算・副作用無し
 	 */
 	BigDecimal discount(OrderRequest req,ProductRepository products,BigDecimal baseAfterPrevious);
+	DiscountType type(); // ADR-004
 }
