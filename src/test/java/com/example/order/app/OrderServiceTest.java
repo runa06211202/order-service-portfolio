@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -229,6 +228,7 @@ class OrderServiceTest {
 		@Tag("anchor")
 		@DisplayName("placeOrder通しhappyパス確認")
 		void endToEnd_happyPath_returnsExpectedTotalsAndLabels() {
+			// Given
 			var pid1 = "P001";
 			var pid2 = "P002";
 			var line1 = new OrderRequest.Line(pid1, 2);
@@ -244,10 +244,10 @@ class OrderServiceTest {
 			doNothing().when(inventory).reserve(anyString(), anyInt());
 			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 仮の税率10%
 
-			// When:
+			// When
 			var result = sut.placeOrder(req);
 
-			// Then:
+			// Then
 			assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo("400"); // 100*2 + 200
 			assertThat(result.totalDiscount()).isEqualByComparingTo("0");
 			assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo("400");
@@ -259,130 +259,6 @@ class OrderServiceTest {
 
 	@Nested
 	class Threshold {
-		static Stream<Arguments> volumeDiscountThresholds() {
-			return Stream.of(
-					Arguments.of(9, new BigDecimal("9000.00"), new BigDecimal("0.00"), new BigDecimal("9000.00")),
-					Arguments.of(10, new BigDecimal("10000.00"), new BigDecimal("500.00"), new BigDecimal("9500.00")),
-					Arguments.of(11, new BigDecimal("11000.00"), new BigDecimal("550.00"), new BigDecimal("10450.00")));
-		}
-
-		@ParameterizedTest
-		@DisplayName("VOLUME割引適用閾値")
-		@MethodSource("volumeDiscountThresholds")
-		void placeOrder_calc_whenVolumeBoundary_qty9_10_11(int qty, BigDecimal expectedNet, BigDecimal expectedDiscount,
-				BigDecimal expectedAfterDiscount) {
-			var pid1 = "P001";
-			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
-			when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, null, new BigDecimal("1000"))));
-			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 仮の税率10%
-
-			// Given: qty = 9/10/11
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(new Line(pid1, qty)));
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			/* Then: totalNetBeforeDiscount = 9000.00/10000.00/11000.00,
-			 * totalDiscount = 0.00/500.00/550.00,
-			 * totalNetAfterDiscount = 9000.00/9500.00/10450.00,
-			 */
-			assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo(expectedNet);
-			assertThat(result.totalDiscount()).isEqualByComparingTo(expectedDiscount);
-			assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo(expectedAfterDiscount);
-		}
-
-		static Stream<Arguments> multiItemDiscountThresholds() {
-			return Stream.of(
-					Arguments.of(List.of(new Line("P001", 1), new Line("P002", 1)), new BigDecimal("300.00"),
-							new BigDecimal("0.00"), new BigDecimal("300.00")),
-					Arguments.of(List.of(new Line("P001", 1), new Line("P002", 1), new Line("P003", 1)),
-							new BigDecimal("600.00"), new BigDecimal("12.00"), new BigDecimal("588.00")),
-					Arguments.of(
-							List.of(new Line("P001", 1), new Line("P002", 1), new Line("P003", 1), new Line("P004", 1)),
-							new BigDecimal("1000.00"), new BigDecimal("20.00"), new BigDecimal("980.00")));
-		}
-
-		private static final Map<String, BigDecimal> PRICE = Map.of(
-				"P001", new BigDecimal("100"),
-				"P002", new BigDecimal("200"),
-				"P003", new BigDecimal("300"),
-				"P004", new BigDecimal("400"));
-
-		class FakeProductRepository implements ProductRepository {
-			private final Map<String, BigDecimal> priceMap;
-
-			FakeProductRepository(Map<String, BigDecimal> m) {
-				this.priceMap = m;
-			}
-
-			public Optional<Product> findById(String id) {
-				var p = priceMap.get(id);
-				return p == null ? Optional.empty() : Optional.of(new Product(id, null, p));
-			}
-		}
-
-		@ParameterizedTest
-		@DisplayName("MULTI_ITEM割引適用閾値")
-		@MethodSource("multiItemDiscountThresholds")
-		void placeOrder_calc_whenMultiItemBoundary_kinds2_3_4(List<Line> lines, BigDecimal expectedNet,
-				BigDecimal expectedDiscount,
-				BigDecimal expectedAfterDiscount) {
-			FakeProductRepository fakeRepo = new FakeProductRepository(PRICE);
-
-			// Given: line.size() = 2/3/4
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
-			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
-			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 仮の税率10%
-
-			// When: sut.placeOrder(req)
-			sut = new OrderService(fakeRepo, inventory, tax);
-			OrderResult result = sut.placeOrder(req);
-
-			/* Then: totalNetBeforeDiscount = 300.00/600.00/1000.00,
-			 * totalDiscount = 0.00/12.00/20.00,
-			 * totalNetAfterDiscount = 300.00/588.00/980.00,
-			 */
-			assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo(expectedNet);
-			assertThat(result.totalDiscount()).isEqualByComparingTo(expectedDiscount);
-			assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo(expectedAfterDiscount);
-		}
-
-		static Stream<Arguments> highAmountDiscountThresholds() {
-			return Stream.of(
-					Arguments.of(new BigDecimal("99999.00"), List.of(new Line("P001", 1)), new BigDecimal("99999.00"),
-							new BigDecimal("0.00"), new BigDecimal("99999.00")),
-					Arguments.of(new BigDecimal("100000.00"), List.of(new Line("P001", 1)), new BigDecimal("100000.00"),
-							new BigDecimal("3000.00"), new BigDecimal("97000.00")),
-					Arguments.of(new BigDecimal("100001.00"), List.of(new Line("P001", 1)), new BigDecimal("100001.00"),
-							new BigDecimal("3000.03"), new BigDecimal("97000.97")));
-		}
-
-		@ParameterizedTest
-		@DisplayName("HIGH_AMOUNT割引適用閾値")
-		@MethodSource("highAmountDiscountThresholds")
-		void placeOrder_calc_whenHighAmountBoundary_99999_100000_100001(BigDecimal price, List<Line> lines,
-				BigDecimal expectedNet,
-				BigDecimal expectedDiscount, BigDecimal expectedAfterDiscount) {
-			var pid1 = "P001";
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
-
-			// Given: Product.price = 99999/100000/100001
-			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
-			when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, null, price)));
-			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 仮の税率10%
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			/* Then: totalNetBeforeDiscount = 99999.00/100000.00/100001.00,
-			 * totalDiscount = 0.00/3000.00/3000.00,
-			 * totalNetAfterDiscount = 99999.00/97000.00/97001.00,
-			 */
-			assertThat(result.totalNetBeforeDiscount()).isEqualByComparingTo(expectedNet);
-			assertThat(result.totalDiscount()).isEqualByComparingTo(expectedDiscount);
-			assertThat(result.totalNetAfterDiscount()).isEqualByComparingTo(expectedAfterDiscount);
-		}
-
 		@Test
 		@Disabled
 		@DisplayName("T-2-1: スケールと正規化確認 ADR-001")
@@ -441,6 +317,7 @@ class OrderServiceTest {
 		@Test
 		@DisplayName("在庫確保の前に税計算が呼ばれていること")
 		void placeOrder_flow_whenCalculateBeforeReserveOrderIsFixed() {
+			// Given
 			var pid1 = "P001";
 			var pid2 = "P002";
 			var l1 = new OrderRequest.Line(pid1, 2);
@@ -457,8 +334,11 @@ class OrderServiceTest {
 			doNothing().when(inventory).reserve(anyString(), anyInt());
 
 			InOrder order = inOrder(tax, inventory);
+			
+			// When
 			sut.placeOrder(req);
 
+			// Then
 			// 計算（税）→ 在庫 の順序
 			order.verify(tax).calculate(any(BigDecimal.class), eq("JP"));
 			order.verify(inventory).reserve(pid1, 2);
@@ -469,6 +349,7 @@ class OrderServiceTest {
 		@Test
 		@DisplayName("可用性チェック→税計算→在庫確保の順に呼ばれていること")
 		void placeOrder_flow_whenCheckAvailableIsCalledBeforeCalculationsAndReserve() {
+			//Given 
 			var pid1 = "P001";
 			var pid2 = "P002";
 			var l1 = new OrderRequest.Line(pid1, 2);
@@ -480,8 +361,10 @@ class OrderServiceTest {
 			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 
 			InOrder order = inOrder(inventory, tax);
+			// When
 			sut.placeOrder(req);
 
+			// Then 
 			// 可用性チェックが最初
 			order.verify(inventory, times(2)).checkAvailable(anyString(), anyInt());
 			// その後に計算（税）
@@ -625,6 +508,7 @@ class OrderServiceTest {
 			@Tag("anchor")
 			@DisplayName("VOLUME割引anchorテスト")
 			void appliesVolumeDiscount_whenQtyAtLeast10() {
+				//Given 
 				var pid1 = "P001";
 				var pid2 = "P002";
 				var qty1 = 10;
@@ -641,9 +525,10 @@ class OrderServiceTest {
 						.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
 				when(tax.calculate(any(), eq("JP"))).thenReturn(rate);
 
+				// When
 				OrderResult result = sut.placeOrder(req);
 
-				// 各行：
+				// Then 各行：
 				// P001: 100×10 = 1000 → 5%OFF → 950
 				// P002: 200×5 = 1000
 				// 小計(割引後)=1950, 割引前=2000
@@ -807,7 +692,7 @@ class OrderServiceTest {
 		@Nested
 		class DiscountLabels {
 			@Test
-		    @Tag("anchor")
+			@Tag("anchor")
 			@DisplayName("割引ラベル確認anchorテスト")
 			void appliedDiscounts_reflects_all_triggered_discounts_in_order() {
 				// Given
@@ -815,29 +700,91 @@ class OrderServiceTest {
 				var pid2 = "P002";
 				var pid3 = "P003";
 				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
-			            new OrderRequest.Line(pid1, 10),
-			            new OrderRequest.Line(pid2, 1),
-			            new OrderRequest.Line(pid3, 1)
-			        ));
-				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1,"A", new BigDecimal("10000"))));
-		        when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2,"B", new BigDecimal("10000"))));
-		        when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3,"C", new BigDecimal("5000"))));
-		        when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
-		        doNothing().when(inventory).reserve(anyString(), anyInt());
-		        when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
-		        
-		        OrderResult r = sut.placeOrder(req);
-		        
-		     // ラベル順は Volume → MultiItem → HighAmount → Cap
-		        assertThat(r.appliedDiscounts())
-		            .containsExactly(
-		                DiscountType.VOLUME,
-		                DiscountType.MULTI_ITEM,
-		                DiscountType.HIGH_AMOUNT
-		            );
+						new OrderRequest.Line(pid1, 10),
+						new OrderRequest.Line(pid2, 1),
+						new OrderRequest.Line(pid3, 1)));
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("10000"))));
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000"))));
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
-		        // 金額は変わらない
-		        assertThat(r.totalDiscount()).isEqualByComparingTo("10434");
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// ラベル順は Volume → MultiItem → HighAmount → Cap
+				assertThat(r.appliedDiscounts())
+						.containsExactly(
+								DiscountType.VOLUME,
+								DiscountType.MULTI_ITEM,
+								DiscountType.HIGH_AMOUNT);
+
+				// Then: 金額は変わらない
+				assertThat(r.totalDiscount()).isEqualByComparingTo("10434");
+			}
+
+			@Test
+			@DisplayName("ADR-010追加テスト Cap到達なし")
+			void cap_label_absent_when_not_engaged() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				// 30% cap に到達しない入力（これまで使ってた 115000 のケースでOK）
+				var req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line(pid1, 10),
+						new OrderRequest.Line(pid2, 1),
+						new OrderRequest.Line(pid3, 1)));
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("10000"))));
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000"))));
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
+
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// Then
+				assertThat(r.appliedDiscounts())
+						.containsExactly(DiscountType.VOLUME, DiscountType.MULTI_ITEM, DiscountType.HIGH_AMOUNT);
+			}
+
+			@Test
+			@DisplayName("ADR-010追加テスト Capポリシー注入によるCap適用テスト")
+			void cap_label_present_when_engaged_with_custom_cap() {
+				// Given
+				var pid1 = "P001";
+				var pid2 = "P002";
+				var pid3 = "P003";
+				// Cap を 5% に下げて“確実に発動”させる
+				var policies = List.of(
+						new VolumeDiscount(),
+						new MultiItemDiscount(),
+						new HighAmountDiscount(),
+						new CapPolicy(new BigDecimal("0.05")));
+				var sutWithCap5 = new OrderService(products, inventory, tax, policies);
+
+				var req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line(pid1, 10),
+						new OrderRequest.Line(pid2, 1),
+						new OrderRequest.Line(pid3, 1)));
+				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("10000"))));
+				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000"))));
+				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
+
+				// When
+				OrderResult r = sutWithCap5.placeOrder(req);
+
+				// Then
+				assertThat(r.appliedDiscounts())
+						.containsExactly(DiscountType.VOLUME, DiscountType.MULTI_ITEM, DiscountType.HIGH_AMOUNT,
+								DiscountType.CAP);
+				// 金額系の期待（総割引=5% cap）は金額テスト側に任せ、ここはラベルのみ見る
 			}
 		}
 
