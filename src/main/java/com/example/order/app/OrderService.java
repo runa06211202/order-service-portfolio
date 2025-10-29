@@ -67,7 +67,7 @@ public class OrderService {
 	    RoundingMode mode = (req.mode() != null) ? req.mode() : RoundingMode.HALF_UP;
 		BigDecimal totalTax = tax.calcTaxAmount(totalNetAfterDiscount, req.region(), mode); // 丸めモード使用
 
-		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
+		BigDecimal totalGross = tax.addTax(totalNetAfterDiscount, req.region(), mode);
 
 		// 在庫在庫確保は最後(ADR-006)
 		reserveInventory(req.lines());

@@ -185,6 +185,8 @@ class OrderServiceTest {
 			doNothing().when(inventory).reserve(anyString(), anyInt());
 			when(tax.calcTaxAmount(any(BigDecimal.class), anyString(),
 					any(RoundingMode.class))).thenReturn(new BigDecimal("40.00")); // 仮の税率10%
+			when(tax.addTax(any(BigDecimal.class), anyString(),
+					any(RoundingMode.class))).thenReturn(new BigDecimal("440"));
 
 			// When
 			var result = sut.placeOrder(req);
