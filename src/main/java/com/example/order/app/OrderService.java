@@ -63,11 +63,21 @@ public class OrderService {
 		BigDecimal totalDiscount = discountResult.total();
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
 
-		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
-		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
+		// 丸め既定：null なら HALF_UP
+	    RoundingMode mode = (req.mode() != null) ? req.mode() : RoundingMode.HALF_UP;
+		BigDecimal totalTax = tax.calcTaxAmount(totalNetAfterDiscount, req.region(), mode); // 丸めモード使用
+
+		BigDecimal totalGross = tax.addTax(totalNetAfterDiscount, req.region(), mode);
 
 		// 在庫在庫確保は最後(ADR-006)
 		reserveInventory(req.lines());
+		
+		// スケールの正規化
+		totalNetBeforeDiscount = totalNetBeforeDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalDiscount = totalDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalNetAfterDiscount = totalNetAfterDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalTax = totalTax.setScale(2, RoundingMode.HALF_UP);
+		totalGross = totalGross.setScale(0, RoundingMode.HALF_UP);
 
 		return new OrderResult(
 				totalNetBeforeDiscount,
@@ -117,12 +127,6 @@ public class OrderService {
 				.orElseThrow(() -> new IllegalArgumentException(
 						"product not found: " + line.productId()));
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
-	}
-
-	// 税計算
-	private BigDecimal calculateTax(BigDecimal netAfterDiscount, String region) {
-		var rate = tax.calculate(netAfterDiscount, region);
-		return netAfterDiscount.multiply(rate).setScale(0, RoundingMode.DOWN); // 小数切捨て
 	}
 
 	// 在庫確保

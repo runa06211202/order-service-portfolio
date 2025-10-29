@@ -5,8 +5,5 @@ import java.math.RoundingMode;
 
 public interface TaxCalculator {
 	BigDecimal calcTaxAmount(BigDecimal net, String region, RoundingMode mode); // ADR-002
-
 	BigDecimal addTax(BigDecimal net, String region, RoundingMode mode);
-
-	BigDecimal calculate(BigDecimal any, String eq);
 }

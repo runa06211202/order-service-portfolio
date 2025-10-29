@@ -1,7 +1,7 @@
 # ADR-001: 金額スケールの統一
 
-- Status: Accepted
-- Date: 2025-10-07 JST
+- Status: Updated
+- Date: 2025-10-29 JST
 - Decision Drivers
   - 金額比較やテスト期待値の**一貫性を保つ**
   - 外部API・UIでの**表現統一（小数桁の混乱防止）**
@@ -26,6 +26,7 @@
 - OrderResult の各金額フィールドのスケールを以下に固定する。
   - totalNet: scale=2
   - totalDiscount: scale=2
+  - totalNetAfterDiscount: scale=2  ← 追加(2025/10/29)
   - totalTax: scale=2（丸め前税額の表現は2桁保持とする）
   - totalGross: scale=0（丸め済み税込合計。外部の丸め規則に従うが格納時は0桁に正規化）
 - OrderResult 生成（公開境界）で必ず setScale により規格化（normalize）し、以降は変更しない。

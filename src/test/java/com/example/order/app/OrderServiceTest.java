@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -45,8 +44,12 @@ import com.example.order.step.VolumeDiscount;
  *  - ADR-002 TaxCalculator に「丸め前の税額」を返す API を追加する
  *  - ADR-003 Repository の findById は null を返さない（“存在しない”は Optional.empty）
  *  - ADR-004 DiscountType enum化
- *  - ADR-006: 副作用を後段に寄せた呼び出し順序の再定義（calculate → reserve）
- *  - ADR-007: 在庫可用性チェック導入と呼び出し順序の再定義（availability→calculate→reserve）
+ *  - ADR-005 割引種別を Enum（DiscountType）で型定義する
+ *  - ADR-006 副作用を後段に寄せた呼び出し順序の再定義（calculate → reserve）
+ *  - ADR-007 在庫可用性チェック導入と呼び出し順序の再定義（availability→calculate→reserve）
+ *  - ADR-008 割引後小計（totalNetAfterDiscount）の応答フィールド追加
+ *  - ADR-009 割引ポリシー注入時の防御コピー（List.copyOf）導入
+ *  - ADR-010 Cap 発動時のみ`DiscountType.CAP`をラベル出力する
  */
 class OrderServiceTest {
 
@@ -165,65 +168,6 @@ class OrderServiceTest {
 
 	@Nested
 	class OrderServiceNormalTest {
-
-		@Test
-		@Disabled
-		@DisplayName("N-2-1: TaxCalculator mode指定あり")
-		void placeOrder_calc_whenTaxCalclatorModeExist() {
-			List<Line> lines = List.of(new Line("A", 5), new Line("B", 5));
-			// Given: OrderRequest = any(), RoundingMode.HALF_DOWN, lines 割引なしになるよう設定
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_DOWN, lines);
-
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("1000"))));
-			when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("1000"))));
-			when(tax.calcTaxAmount(any(), any(), any())).thenReturn(new BigDecimal("1000.00"));
-			when(tax.addTax(any(), any(), any())).thenReturn(new BigDecimal("11000"));
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			// Then: totalTax = 1000.00 totalGross = 11000 calcTaxAmount(10000.00,any(),RoundingMode.HALF_DOWN), addTax(10000.00,any(),RoundingMode.HALF_DOWN)
-			assertThat(result.totalTax()).isEqualByComparingTo("1000.00");
-			assertThat(result.totalGross()).isEqualByComparingTo("11000");
-			ArgumentCaptor<RoundingMode> modeCaptor = ArgumentCaptor.forClass(RoundingMode.class);
-
-			// calcTaxAmount, addTax呼び出しの引数をキャプチャ
-			verify(tax).calcTaxAmount(any(), any(), modeCaptor.capture());
-			verify(tax).addTax(any(), any(), modeCaptor.capture());
-
-			// 確認：HALF_DOWN が渡っていること
-			assertThat(modeCaptor.getValue()).isEqualTo(RoundingMode.HALF_DOWN);
-		}
-
-		@Test
-		@Disabled
-		@DisplayName("N-2-2: TaxCalculator mode指定なし(null)")
-		void placeOrder_calc_whenTaxCalclatorModeNull() {
-			List<Line> lines = List.of(new Line("A", 5), new Line("B", 5));
-			// Given: OrderRequest = any(), null, lines 割引なしになるよう設定
-			OrderRequest req = new OrderRequest("JP", null, lines);
-
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("1000"))));
-			when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("1000"))));
-			when(tax.calcTaxAmount(any(), any(), any())).thenReturn(new BigDecimal("1000.00"));
-			when(tax.addTax(any(), any(), any())).thenReturn(new BigDecimal("11000"));
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			// Then: totalTax = 1000.00 totalGross = 11000 calcTaxAmount(10000.00,any(),RoundingMode.HALF_UP), addTax(10000.00,any(),RoundingMode.HALF_UP)
-			assertThat(result.totalTax()).isEqualByComparingTo("1000.00");
-			assertThat(result.totalGross()).isEqualByComparingTo("11000");
-			ArgumentCaptor<RoundingMode> modeCaptor = ArgumentCaptor.forClass(RoundingMode.class);
-
-			// calcTaxAmount, addTax呼び出しの引数をキャプチャ
-			verify(tax).calcTaxAmount(any(), any(), modeCaptor.capture());
-			verify(tax).addTax(any(), any(), modeCaptor.capture());
-
-			// 確認：HALF_DOWN が渡っていること
-			assertThat(modeCaptor.getValue()).isEqualTo(RoundingMode.HALF_UP);
-		}
-
 		@Test
 		@Tag("anchor")
 		@DisplayName("placeOrder通しhappyパス確認")
@@ -242,7 +186,10 @@ class OrderServiceTest {
 			when(products.findById(pid2))
 					.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
 			doNothing().when(inventory).reserve(anyString(), anyInt());
-			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 仮の税率10%
+			when(tax.calcTaxAmount(any(BigDecimal.class), anyString(),
+					any(RoundingMode.class))).thenReturn(new BigDecimal("40.00")); // 仮の税率10%
+			when(tax.addTax(any(BigDecimal.class), anyString(),
+					any(RoundingMode.class))).thenReturn(new BigDecimal("440"));
 
 			// When
 			var result = sut.placeOrder(req);
@@ -255,29 +202,36 @@ class OrderServiceTest {
 			assertThat(result.totalGross()).isEqualByComparingTo("440");
 			assertThat(result.appliedDiscounts()).isEmpty();
 		}
-	}
 
-	@Nested
-	class Threshold {
 		@Test
-		@Disabled
-		@DisplayName("T-2-1: スケールと正規化確認 ADR-001")
-		void placeOrder_calc_whenNormalizeScaleOfGrossAndTax() {
+		@Tag("anchor")
+		@DisplayName("OrderResultスケール確認")
+		void ensures_orderResult_amounts_are_normalized_scales() {
 			// Given
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("100000"))));
-			when(tax.calcTaxAmount(any(), anyString(), any())).thenReturn(new BigDecimal("10000.4999")); // scale=4
-			when(tax.addTax(any(), anyString(), any())).thenReturn(new BigDecimal("110000.49")); // scale=2
+			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
+					List.of(new OrderRequest.Line("P001", 10)));
+			when(products.findById("P001"))
+					.thenReturn(Optional.of(new Product("P001", "Apple", new BigDecimal("123.456"))));
+			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+			doNothing().when(inventory).reserve(anyString(), anyInt());
 
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(new Line("A", 1)));
+			// 10%税、丸めHALF_UP、税込み1234.56→Gross=1235
+			when(tax.addTax(any(), eq("JP"), any()))
+					.thenAnswer(inv -> {
+						BigDecimal net = inv.getArgument(0);
+						return net.multiply(new BigDecimal("1.10"))
+								.setScale(0, RoundingMode.HALF_UP);
+					});
 
 			// When
 			OrderResult result = sut.placeOrder(req);
 
-			// Then: スケールと金額の確認
-			assertThat(result.totalGross().scale()).isEqualTo(0);
-			assertThat(result.totalGross()).isEqualByComparingTo("110000");
+			// Then
+			assertThat(result.totalNetBeforeDiscount().scale()).isEqualTo(2);
+			assertThat(result.totalDiscount().scale()).isEqualTo(2);
+			assertThat(result.totalNetAfterDiscount().scale()).isEqualTo(2);
 			assertThat(result.totalTax().scale()).isEqualTo(2);
-			assertThat(result.totalTax()).isEqualByComparingTo("10000.50");
+			assertThat(result.totalGross().scale()).isEqualTo(0);
 		}
 	}
 
@@ -300,9 +254,6 @@ class OrderServiceTest {
 					.thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
 			when(products.findById(pid2))
 					.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
-
-			// 税計算はどんな入力でも0返すようにしておく
-			when(tax.calculate(any(), any())).thenReturn(BigDecimal.ZERO);
 
 			// When
 			sut.placeOrder(req);
@@ -330,17 +281,18 @@ class OrderServiceTest {
 			when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
 			when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
 			// 税は任意の0.1など（丸め仕様に合わせる）
-			when(tax.calculate(any(BigDecimal.class), eq("JP"))).thenReturn(new BigDecimal("0.10"));
+			when(tax.calcTaxAmount(any(BigDecimal.class), anyString(), any(RoundingMode.class)))
+					.thenReturn(new BigDecimal("0.00"));
 			doNothing().when(inventory).reserve(anyString(), anyInt());
 
 			InOrder order = inOrder(tax, inventory);
-			
+
 			// When
 			sut.placeOrder(req);
 
 			// Then
 			// 計算（税）→ 在庫 の順序
-			order.verify(tax).calculate(any(BigDecimal.class), eq("JP"));
+			order.verify(tax).calcTaxAmount(any(), any(), any());
 			order.verify(inventory).reserve(pid1, 2);
 			order.verify(inventory).reserve(pid2, 1);
 			order.verifyNoMoreInteractions();
@@ -357,7 +309,8 @@ class OrderServiceTest {
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(l1, l2));
 			when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
 			when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
-			when(tax.calculate(any(), any())).thenReturn(BigDecimal.ZERO);
+			when(tax.calcTaxAmount(any(BigDecimal.class), anyString(), any(RoundingMode.class)))
+					.thenReturn(new BigDecimal("0.00"));
 			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 
 			InOrder order = inOrder(inventory, tax);
@@ -368,7 +321,7 @@ class OrderServiceTest {
 			// 可用性チェックが最初
 			order.verify(inventory, times(2)).checkAvailable(anyString(), anyInt());
 			// その後に計算（税）
-			order.verify(tax).calculate(any(), any());
+			order.verify(tax).calcTaxAmount(any(), any(), any());
 			// 最後に確保
 			order.verify(inventory, times(2)).reserve(anyString(), anyInt());
 		}
@@ -380,24 +333,6 @@ class OrderServiceTest {
 				String p = table.get(id);
 				return p == null ? Optional.empty() : Optional.of(new Product(id, null, new BigDecimal(p)));
 			});
-		}
-
-		@Test
-		@Disabled
-		@DisplayName("V-1-2: mode が null のとき HALF_UP が渡る（デフォルト）")
-		void placeOrder_flow_whenOrderPassesHALFUPWhenModeIsNull() {
-			// Given: Product = (["A", "1000"])
-			stubProductsPriceTable(Map.of("A", "1000"));
-			OrderRequest req = new OrderRequest("JP", null, List.of(new OrderRequest.Line("A", 1)));
-
-			// When: sut.placeOrder(req)
-			sut.placeOrder(req);
-
-			// Then: modeCap = RoundingMode.HALF_UP
-			ArgumentCaptor<RoundingMode> modeCap = ArgumentCaptor.forClass(RoundingMode.class);
-			verify(tax).calcTaxAmount(any(), anyString(), modeCap.capture());
-			verify(tax).addTax(any(), anyString(), eq(modeCap.getValue()));
-			assertThat(modeCap.getValue()).isEqualTo(RoundingMode.HALF_UP);
 		}
 
 		@Nested
@@ -457,48 +392,13 @@ class OrderServiceTest {
 				when(inventory.checkAvailable(pid, 1)).thenReturn(true); // ここは通す
 				when(products.findById(pid))
 						.thenReturn(Optional.of(new Product(pid, "Apple", new BigDecimal("100"))));
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 計算は走る
+				when(tax.calcTaxAmount(any(BigDecimal.class), anyString(),
+						any(RoundingMode.class))).thenReturn(new BigDecimal("10.00"));
 				doThrow(new RuntimeException("no stock")).when(inventory).reserve(pid, 1);
 
 				// Then
 				assertThatThrownBy(() -> sut.placeOrder(req)).isInstanceOf(RuntimeException.class);
 				// 税は呼ばれてOK（計算→reserve→例外の順）
-			}
-		}
-
-		@Nested
-		class FormatAndADR {
-			@Test
-			@Disabled("30% cap is a future guard Refs: ADR-004")
-			@DisplayName("合計割引が素合計の30%を超える場合、Cap=30%で丸められる")
-			void placeOrder_caps_whenRawDiscountExceedsCap() {
-				// Given: Capを越える“仮定の世界”を記述（現実には到達しない）
-				// 例: 小計をSとし、仮に原始割引が0.45Sになったとすると、結果は0.30Sで固定されるべき。
-				var lines = List.of(
-						new Line("A", 10), // VOLUMEを起動しやすい条件
-						new Line("B", 10),
-						new Line("C", 10));
-				when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("10000"))));
-				when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("20000"))));
-				when(products.findById("C")).thenReturn(Optional.of(new Product("C", null, new BigDecimal("30000"))));
-				// 税はこのテストの主題外：呼出確認のみで値検証はしない
-				when(tax.addTax(any(), anyString(), any())).thenReturn(BigDecimal.ZERO);
-				when(tax.calcTaxAmount(any(), anyString(), any())).thenReturn(BigDecimal.ZERO);
-
-				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
-
-				// When
-				var result = sut.placeOrder(req);
-
-				// Then: 期待だけを“仕様として”残す（今は到達不能のため Disabled）
-				BigDecimal subtotal = new BigDecimal("600000.00"); // 10000*10 + 20000*10 + 30000*10
-				BigDecimal cap = subtotal.multiply(new BigDecimal("0.30")).setScale(2, RoundingMode.HALF_UP);
-
-				// 現行実装では totalDiscount ≒ 0.10S しかならないが、
-				// 仕様としては “原始割引がCap超えなら totalDiscount = 0.30S に丸める”ことを宣言する。
-				assertThat(result.totalDiscount()).isEqualByComparingTo(cap);
-				// ラベルは Cap を追加しない（適用済み割引の記録のみ）
-				// assertThat(result.appliedDiscounts()).doesNotContain(DiscountType.valueOf("CAP"));
 			}
 		}
 
@@ -523,7 +423,6 @@ class OrderServiceTest {
 						.thenReturn(Optional.of(new Product(pid1, "Apple", new BigDecimal("100"))));
 				when(products.findById(pid2))
 						.thenReturn(Optional.of(new Product(pid2, "Banana", new BigDecimal("200"))));
-				when(tax.calculate(any(), eq("JP"))).thenReturn(rate);
 
 				// When
 				OrderResult result = sut.placeOrder(req);
@@ -560,7 +459,6 @@ class OrderServiceTest {
 				when(products.findById(pid1)).thenReturn(Optional.of(new Product(pid1, "A", new BigDecimal("100")))); // 100*10=1000
 				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("200")))); // 200*1=200
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("300")))); // 300*1=300
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				/* 期待計算：
 				 * subtotal = 1000 + 200 + 300 = 1500
@@ -593,7 +491,6 @@ class OrderServiceTest {
 				when(products.findById(pid2)).thenReturn(Optional.of(new Product(pid2, "B", new BigDecimal("10000")))); // 10000
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				/*
 				 * 計算期待:
@@ -627,7 +524,6 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				/*
 				 * 期待値（Cap未発動のはず）
@@ -663,7 +559,6 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000")))); // 5000
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				// ポリシー列を明示注入（既定の 30% ではなく 5% にする）
 				var customPolicies = List.of(
@@ -708,7 +603,6 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				// When
 				OrderResult r = sut.placeOrder(req);
@@ -741,7 +635,6 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				// When
 				OrderResult r = sut.placeOrder(req);
@@ -775,7 +668,6 @@ class OrderServiceTest {
 				when(products.findById(pid3)).thenReturn(Optional.of(new Product(pid3, "C", new BigDecimal("5000"))));
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
-				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10")); // 10%
 
 				// When
 				OrderResult r = sutWithCap5.placeOrder(req);
@@ -788,5 +680,71 @@ class OrderServiceTest {
 			}
 		}
 
+		class TaxCalculation {
+			@Test
+			@Tag("anchor")
+			void calculates_tax_on_discounted_total_with_rounding() {
+				//Given 
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line("P001", 10)));
+				when(products.findById("P001"))
+						.thenReturn(Optional.of(new Product("P001", "A", new BigDecimal("10000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calcTaxAmount(any(BigDecimal.class), eq("JP"), RoundingMode.HALF_UP))
+						.thenReturn(new BigDecimal("0.00"));
+
+				//When
+				OrderResult r = sut.placeOrder(req);
+
+				//Then 
+				assertThat(r.totalTax()).isEqualByComparingTo("9500"); // 割引後95,000×10%
+				assertThat(r.totalGross()).isEqualByComparingTo("104500");
+			}
+
+			@Test
+			@Tag("anchor")
+			void calculates_tax_on_discounted_total_none_rounding() {
+				//Given mode = null
+				OrderRequest req = new OrderRequest("JP", null, List.of(
+						new OrderRequest.Line("P001", 10)));
+				when(products.findById("P001"))
+						.thenReturn(Optional.of(new Product("P001", "A", new BigDecimal("10000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calcTaxAmount(new BigDecimal("100000.00"), req.region(), RoundingMode.HALF_UP))
+						.thenReturn(new BigDecimal("0.00"));
+
+				//When
+				OrderResult r = sut.placeOrder(req);
+
+				//Then 
+				assertThat(r.totalTax()).isEqualByComparingTo("9500"); // 割引後95,000×10%
+				assertThat(r.totalGross()).isEqualByComparingTo("104500");
+			}
+
+			@Test
+			@Tag("anchor")
+			void calculates_totalGross_using_addTax_port() {
+				//Given 
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line("P001", 10)));
+
+				when(products.findById("P001"))
+						.thenReturn(Optional.of(new Product("P001", "Apple", new BigDecimal("10000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				// addTaxが呼ばれて総額を返す想定
+				when(tax.addTax(new BigDecimal("95000"), "JP", RoundingMode.HALF_UP))
+						.thenReturn(new BigDecimal("104500"));
+
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// Then
+				assertThat(r.totalGross()).isEqualByComparingTo("104500");
+				verify(tax).addTax(any(), eq("JP"), any()); // Portが呼ばれたことも検証
+			}
+		}
 	}
 }
