@@ -63,7 +63,10 @@ public class OrderService {
 		BigDecimal totalDiscount = discountResult.total();
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
 
-		BigDecimal totalTax = calculateTax(totalNetAfterDiscount, req.region());
+		// 丸め既定：null なら HALF_UP
+	    RoundingMode mode = (req.mode() != null) ? req.mode() : RoundingMode.HALF_UP;
+		BigDecimal totalTax = tax.calcTaxAmount(totalNetAfterDiscount, req.region(), mode); // 丸めモード使用
+
 		BigDecimal totalGross = totalNetAfterDiscount.add(totalTax);
 
 		// 在庫在庫確保は最後(ADR-006)
@@ -117,12 +120,6 @@ public class OrderService {
 				.orElseThrow(() -> new IllegalArgumentException(
 						"product not found: " + line.productId()));
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
-	}
-
-	// 税計算
-	private BigDecimal calculateTax(BigDecimal netAfterDiscount, String region) {
-		var rate = tax.calculate(netAfterDiscount, region);
-		return netAfterDiscount.multiply(rate).setScale(0, RoundingMode.DOWN); // 小数切捨て
 	}
 
 	// 在庫確保
