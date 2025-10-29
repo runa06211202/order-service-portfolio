@@ -1,9 +1,12 @@
 package com.example.order.engine;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.example.order.domain.policy.DiscountPolicy;
+import com.example.order.dto.DiscountResult;
+import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
@@ -15,17 +18,21 @@ public class DiscountEngine {
 	 * 順序依存
 	 * 次ポリシーは全ポリシーの割引金額分を「引いた後」を基準に計算
 	 */
-	public static BigDecimal applyInOrder(List<DiscountPolicy> policies, OrderRequest req, ProductRepository products,
+	public static DiscountResult applyInOrder(List<DiscountPolicy> policies, OrderRequest req, ProductRepository products,
 			BigDecimal subtotal) {
 		BigDecimal total = BigDecimal.ZERO;
 		BigDecimal base = subtotal;
+		List<DiscountType> applied = new ArrayList<>();
 
 		for (var p : policies) {
 			BigDecimal d = p.discount(req, products, base);
+			if (d.compareTo(BigDecimal.ZERO) != 0) { // ← 非ゼロなら適用(ADR-010)
+		        applied.add(p.type());
+		    }
 			total = total.add(d);
 			base  = base.subtract(d);
 		}
-		return total;
+		return new DiscountResult(total, applied);
 	}
 
 }

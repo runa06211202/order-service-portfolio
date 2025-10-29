@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 import com.example.order.domain.model.Product;
 import com.example.order.domain.policy.DiscountPolicy;
+import com.example.order.dto.DiscountType;
 import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
@@ -23,5 +24,9 @@ public class VolumeDiscount implements DiscountPolicy {
 			}
 		}
 		return total;
+	}
+	@Override
+	public DiscountType type() {
+	    return DiscountType.VOLUME;
 	}
 }
