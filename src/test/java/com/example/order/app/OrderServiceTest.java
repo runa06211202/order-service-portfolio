@@ -403,42 +403,6 @@ class OrderServiceTest {
 		}
 
 		@Nested
-		class FormatAndADR {
-			@Test
-			@Disabled("30% cap is a future guard Refs: ADR-004")
-			@DisplayName("合計割引が素合計の30%を超える場合、Cap=30%で丸められる")
-			void placeOrder_caps_whenRawDiscountExceedsCap() {
-				// Given: Capを越える“仮定の世界”を記述（現実には到達しない）
-				// 例: 小計をSとし、仮に原始割引が0.45Sになったとすると、結果は0.30Sで固定されるべき。
-				var lines = List.of(
-						new Line("A", 10), // VOLUMEを起動しやすい条件
-						new Line("B", 10),
-						new Line("C", 10));
-				when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("10000"))));
-				when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("20000"))));
-				when(products.findById("C")).thenReturn(Optional.of(new Product("C", null, new BigDecimal("30000"))));
-				// 税はこのテストの主題外：呼出確認のみで値検証はしない
-				when(tax.addTax(any(), anyString(), any())).thenReturn(BigDecimal.ZERO);
-				when(tax.calcTaxAmount(any(), anyString(), any())).thenReturn(BigDecimal.ZERO);
-
-				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, lines);
-
-				// When
-				var result = sut.placeOrder(req);
-
-				// Then: 期待だけを“仕様として”残す（今は到達不能のため Disabled）
-				BigDecimal subtotal = new BigDecimal("600000.00"); // 10000*10 + 20000*10 + 30000*10
-				BigDecimal cap = subtotal.multiply(new BigDecimal("0.30")).setScale(2, RoundingMode.HALF_UP);
-
-				// 現行実装では totalDiscount ≒ 0.10S しかならないが、
-				// 仕様としては “原始割引がCap超えなら totalDiscount = 0.30S に丸める”ことを宣言する。
-				assertThat(result.totalDiscount()).isEqualByComparingTo(cap);
-				// ラベルは Cap を追加しない（適用済み割引の記録のみ）
-				// assertThat(result.appliedDiscounts()).doesNotContain(DiscountType.valueOf("CAP"));
-			}
-		}
-
-		@Nested
 		class DiscountRules {
 			@Test
 			@Tag("anchor")
