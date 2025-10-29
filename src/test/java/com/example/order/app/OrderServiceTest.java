@@ -334,7 +334,7 @@ class OrderServiceTest {
 			doNothing().when(inventory).reserve(anyString(), anyInt());
 
 			InOrder order = inOrder(tax, inventory);
-			
+
 			// When
 			sut.placeOrder(req);
 
@@ -788,5 +788,26 @@ class OrderServiceTest {
 			}
 		}
 
+		class TaxCalculation {
+			@Test
+			@Tag("anchor")
+			void calculates_tax_on_discounted_total_with_rounding() {
+				//Given 
+				OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(
+						new OrderRequest.Line("P001", 10)));
+				when(products.findById("P001"))
+						.thenReturn(Optional.of(new Product("P001", "A", new BigDecimal("10000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calculate(any(), eq("JP"))).thenReturn(new BigDecimal("0.10"));
+				
+				//When
+				OrderResult r = sut.placeOrder(req);
+				
+				//Then 
+				assertThat(r.totalTax()).isEqualByComparingTo("9500"); // 割引後95,000×10%
+		        assertThat(r.totalGross()).isEqualByComparingTo("104500");
+			}
+		}
 	}
 }
