@@ -199,6 +199,37 @@ class OrderServiceTest {
 			assertThat(result.totalGross()).isEqualByComparingTo("440");
 			assertThat(result.appliedDiscounts()).isEmpty();
 		}
+
+		@Test
+		@Tag("anchor")
+		@DisplayName("OrderResultスケール確認")
+		void ensures_orderResult_amounts_are_normalized_scales() {
+			// Given
+			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
+					List.of(new OrderRequest.Line("P001", 10)));
+			when(products.findById("P001"))
+					.thenReturn(Optional.of(new Product("P001", "Apple", new BigDecimal("123.456"))));
+			when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+			doNothing().when(inventory).reserve(anyString(), anyInt());
+
+			// 10%税、丸めHALF_UP、税込み1234.56→Gross=1235
+			when(tax.addTax(any(), eq("JP"), any()))
+					.thenAnswer(inv -> {
+						BigDecimal net = inv.getArgument(0);
+						return net.multiply(new BigDecimal("1.10"))
+								.setScale(0, RoundingMode.HALF_UP);
+					});
+
+			// When
+			OrderResult result = sut.placeOrder(req);
+
+			// Then
+			assertThat(result.totalNetBeforeDiscount().scale()).isEqualTo(2);
+			assertThat(result.totalDiscount().scale()).isEqualTo(2);
+			assertThat(result.totalNetAfterDiscount().scale()).isEqualTo(2);
+			assertThat(result.totalTax().scale()).isEqualTo(2);
+			assertThat(result.totalGross().scale()).isEqualTo(0);
+		}
 	}
 
 	@Nested
@@ -779,15 +810,15 @@ class OrderServiceTest {
 				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
 				doNothing().when(inventory).reserve(anyString(), anyInt());
 				// addTaxが呼ばれて総額を返す想定
-		        when(tax.addTax(new BigDecimal("95000"), "JP", RoundingMode.HALF_UP))
-		            .thenReturn(new BigDecimal("104500"));
-		        
-		        // When
-		        OrderResult r = sut.placeOrder(req);
-		        
-		        // Then
-		        assertThat(r.totalGross()).isEqualByComparingTo("104500");
-		        verify(tax).addTax(any(), eq("JP"), any()); // Portが呼ばれたことも検証
+				when(tax.addTax(new BigDecimal("95000"), "JP", RoundingMode.HALF_UP))
+						.thenReturn(new BigDecimal("104500"));
+
+				// When
+				OrderResult r = sut.placeOrder(req);
+
+				// Then
+				assertThat(r.totalGross()).isEqualByComparingTo("104500");
+				verify(tax).addTax(any(), eq("JP"), any()); // Portが呼ばれたことも検証
 			}
 		}
 	}
