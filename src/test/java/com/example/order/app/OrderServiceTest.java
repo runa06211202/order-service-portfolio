@@ -164,6 +164,47 @@ class OrderServiceTest {
 					.hasMessageContaining("product not found: B");
 			verifyNoInteractions(inventory);
 		}
+
+		@Test
+		void throws_when_region_is_null() {
+			// Given
+			OrderRequest req = new OrderRequest(null, RoundingMode.HALF_UP,
+					List.of(new OrderRequest.Line("P001", 1)));
+
+			// When Then
+			assertThatThrownBy(() -> sut.placeOrder(req))
+					.isInstanceOf(IllegalArgumentException.class)
+					.hasMessageContaining("region");
+			verifyNoInteractions(products, inventory, tax); // region NGなら以後呼ばれない
+		}
+
+		@ParameterizedTest
+		@MethodSource("blankStrings")
+		void throws_when_region_is_blank(String region) {
+			// Given
+			OrderRequest req = new OrderRequest(region, RoundingMode.HALF_UP,
+					List.of(new OrderRequest.Line("P001", 1)));
+			// When Then
+			assertThatThrownBy(() -> sut.placeOrder(req))
+					.isInstanceOf(IllegalArgumentException.class)
+					.hasMessageContaining("region");
+			verifyNoInteractions(products, inventory, tax);
+		}
+
+		@Test
+		void throws_when_product_not_found() {
+			// Given
+			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
+					List.of(new OrderRequest.Line("NO-SUCH", 1)));
+			when(products.findById("NO-SUCH")).thenReturn(java.util.Optional.empty());
+
+			// When Then
+			assertThatThrownBy(() -> sut.placeOrder(req))
+					.isInstanceOf(IllegalArgumentException.class)
+					.hasMessageContaining("product not found");
+			// 可用性・在庫・税は一切呼ばれない
+			verifyNoInteractions(inventory, tax);
+		}
 	}
 
 	@Nested
