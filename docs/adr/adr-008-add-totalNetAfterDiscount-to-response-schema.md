@@ -1,6 +1,6 @@
 # ADR-008:割引後小計（totalNetAfterDiscount）の応答フィールド追加
-- Status: Accepted
-- Date: 2025-10-25 JST
+- Status: Updated
+- Date: 2025-10-29 JST
 - Related ADRs: ADR-006 (calculate-before-reserve), ADR-007 (availability-check)
 
 ---
@@ -22,7 +22,7 @@ totalTax や totalGross がどの段階の金額を基に算出されたかを
 
 ##Decision
 `OrderResult`に`totalNetAfterDiscount`フィールドを追加する。
-この値は「割引後小計（＝課税対象金額）」を表し、
+この値は「割引後小計（＝課税対象金額）」を表す。
 下記の式を不変条件として保持する。<br>
 
 ```java
@@ -30,7 +30,11 @@ totalTax や totalGross がどの段階の金額を基に算出されたかを
 	totalGross = totalNetAfterDiscount + totalTax
 ```
 
-本項目は出力専用（読み取り専用）とし、
+- totalGross は税計算Port（TaxCalculator）の addTax() を用いて算出する。
+- addTax() の戻り値は totalNetAfterDiscount + totalTax に等価であるが、
+  税額および丸め処理は Port 内部の実装責務とする。
+  
+- 本項目は出力専用（読み取り専用）とし、
 クライアントはこの値を用いて税額計算結果の妥当性を検証できる。<br>
 
 ---
