@@ -71,6 +71,13 @@ public class OrderService {
 
 		// 在庫在庫確保は最後(ADR-006)
 		reserveInventory(req.lines());
+		
+		// スケールの正規化
+		totalNetBeforeDiscount = totalNetBeforeDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalDiscount = totalDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalNetAfterDiscount = totalNetAfterDiscount.setScale(2, RoundingMode.HALF_UP);
+		totalTax = totalTax.setScale(2, RoundingMode.HALF_UP);
+		totalGross = totalGross.setScale(0, RoundingMode.HALF_UP);
 
 		return new OrderResult(
 				totalNetBeforeDiscount,
