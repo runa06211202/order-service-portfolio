@@ -165,65 +165,6 @@ class OrderServiceTest {
 
 	@Nested
 	class OrderServiceNormalTest {
-
-		@Test
-		@Disabled
-		@DisplayName("N-2-1: TaxCalculator mode指定あり")
-		void placeOrder_calc_whenTaxCalclatorModeExist() {
-			List<Line> lines = List.of(new Line("A", 5), new Line("B", 5));
-			// Given: OrderRequest = any(), RoundingMode.HALF_DOWN, lines 割引なしになるよう設定
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_DOWN, lines);
-
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("1000"))));
-			when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("1000"))));
-			when(tax.calcTaxAmount(any(), any(), any())).thenReturn(new BigDecimal("1000.00"));
-			when(tax.addTax(any(), any(), any())).thenReturn(new BigDecimal("11000"));
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			// Then: totalTax = 1000.00 totalGross = 11000 calcTaxAmount(10000.00,any(),RoundingMode.HALF_DOWN), addTax(10000.00,any(),RoundingMode.HALF_DOWN)
-			assertThat(result.totalTax()).isEqualByComparingTo("1000.00");
-			assertThat(result.totalGross()).isEqualByComparingTo("11000");
-			ArgumentCaptor<RoundingMode> modeCaptor = ArgumentCaptor.forClass(RoundingMode.class);
-
-			// calcTaxAmount, addTax呼び出しの引数をキャプチャ
-			verify(tax).calcTaxAmount(any(), any(), modeCaptor.capture());
-			verify(tax).addTax(any(), any(), modeCaptor.capture());
-
-			// 確認：HALF_DOWN が渡っていること
-			assertThat(modeCaptor.getValue()).isEqualTo(RoundingMode.HALF_DOWN);
-		}
-
-		@Test
-		@Disabled
-		@DisplayName("N-2-2: TaxCalculator mode指定なし(null)")
-		void placeOrder_calc_whenTaxCalclatorModeNull() {
-			List<Line> lines = List.of(new Line("A", 5), new Line("B", 5));
-			// Given: OrderRequest = any(), null, lines 割引なしになるよう設定
-			OrderRequest req = new OrderRequest("JP", null, lines);
-
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("1000"))));
-			when(products.findById("B")).thenReturn(Optional.of(new Product("B", null, new BigDecimal("1000"))));
-			when(tax.calcTaxAmount(any(), any(), any())).thenReturn(new BigDecimal("1000.00"));
-			when(tax.addTax(any(), any(), any())).thenReturn(new BigDecimal("11000"));
-
-			// When: sut.placeOrder(req)
-			OrderResult result = sut.placeOrder(req);
-
-			// Then: totalTax = 1000.00 totalGross = 11000 calcTaxAmount(10000.00,any(),RoundingMode.HALF_UP), addTax(10000.00,any(),RoundingMode.HALF_UP)
-			assertThat(result.totalTax()).isEqualByComparingTo("1000.00");
-			assertThat(result.totalGross()).isEqualByComparingTo("11000");
-			ArgumentCaptor<RoundingMode> modeCaptor = ArgumentCaptor.forClass(RoundingMode.class);
-
-			// calcTaxAmount, addTax呼び出しの引数をキャプチャ
-			verify(tax).calcTaxAmount(any(), any(), modeCaptor.capture());
-			verify(tax).addTax(any(), any(), modeCaptor.capture());
-
-			// 確認：HALF_DOWN が渡っていること
-			assertThat(modeCaptor.getValue()).isEqualTo(RoundingMode.HALF_UP);
-		}
-
 		@Test
 		@Tag("anchor")
 		@DisplayName("placeOrder通しhappyパス確認")
@@ -792,6 +733,26 @@ class OrderServiceTest {
 				doNothing().when(inventory).reserve(anyString(), anyInt());
 				when(tax.calcTaxAmount(any(BigDecimal.class), eq("JP"), RoundingMode.HALF_UP)).thenReturn(new BigDecimal("0.00"));
 				
+				//When
+				OrderResult r = sut.placeOrder(req);
+				
+				//Then 
+				assertThat(r.totalTax()).isEqualByComparingTo("9500"); // 割引後95,000×10%
+		        assertThat(r.totalGross()).isEqualByComparingTo("104500");
+			}
+			
+			@Test
+			@Tag("anchor")
+			void calculates_tax_on_discounted_total_none_rounding() {
+				//Given mode = null
+				OrderRequest req = new OrderRequest("JP", null, List.of(
+						new OrderRequest.Line("P001", 10)));
+				when(products.findById("P001"))
+						.thenReturn(Optional.of(new Product("P001", "A", new BigDecimal("10000"))));
+				when(inventory.checkAvailable(anyString(), anyInt())).thenReturn(true);
+				doNothing().when(inventory).reserve(anyString(), anyInt());
+				when(tax.calcTaxAmount(new BigDecimal("100000.00"), req.region(), RoundingMode.HALF_UP)).thenReturn(new BigDecimal("0.00"));
+			
 				//When
 				OrderResult r = sut.placeOrder(req);
 				
