@@ -196,14 +196,17 @@ class OrderServiceTest {
 			// Given
 			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
 					List.of(new OrderRequest.Line("NO-SUCH", 1)));
+			// 可用性チェックは通過する
+			when(inventory.checkAvailable("NO-SUCH", 1)).thenReturn(true);
 			when(products.findById("NO-SUCH")).thenReturn(java.util.Optional.empty());
 
 			// When Then
 			assertThatThrownBy(() -> sut.placeOrder(req))
 					.isInstanceOf(IllegalArgumentException.class)
 					.hasMessageContaining("product not found");
-			// 可用性・在庫・税は一切呼ばれない
-			verifyNoInteractions(inventory, tax);
+			// 在庫確認・税は一切呼ばれない
+			verify(inventory, never()).reserve(anyString(), anyInt());
+			verifyNoInteractions(tax);
 		}
 	}
 
