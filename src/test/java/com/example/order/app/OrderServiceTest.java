@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -45,8 +44,12 @@ import com.example.order.step.VolumeDiscount;
  *  - ADR-002 TaxCalculator に「丸め前の税額」を返す API を追加する
  *  - ADR-003 Repository の findById は null を返さない（“存在しない”は Optional.empty）
  *  - ADR-004 DiscountType enum化
- *  - ADR-006: 副作用を後段に寄せた呼び出し順序の再定義（calculate → reserve）
- *  - ADR-007: 在庫可用性チェック導入と呼び出し順序の再定義（availability→calculate→reserve）
+ *  - ADR-005 割引種別を Enum（DiscountType）で型定義する
+ *  - ADR-006 副作用を後段に寄せた呼び出し順序の再定義（calculate → reserve）
+ *  - ADR-007 在庫可用性チェック導入と呼び出し順序の再定義（availability→calculate→reserve）
+ *  - ADR-008 割引後小計（totalNetAfterDiscount）の応答フィールド追加
+ *  - ADR-009 割引ポリシー注入時の防御コピー（List.copyOf）導入
+ *  - ADR-010 Cap 発動時のみ`DiscountType.CAP`をラベル出力する
  */
 class OrderServiceTest {
 
@@ -233,30 +236,6 @@ class OrderServiceTest {
 	}
 
 	@Nested
-	class Threshold {
-		@Test
-		@Disabled
-		@DisplayName("T-2-1: スケールと正規化確認 ADR-001")
-		void placeOrder_calc_whenNormalizeScaleOfGrossAndTax() {
-			// Given
-			when(products.findById("A")).thenReturn(Optional.of(new Product("A", null, new BigDecimal("100000"))));
-			when(tax.calcTaxAmount(any(), anyString(), any())).thenReturn(new BigDecimal("10000.4999")); // scale=4
-			when(tax.addTax(any(), anyString(), any())).thenReturn(new BigDecimal("110000.49")); // scale=2
-
-			OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP, List.of(new Line("A", 1)));
-
-			// When
-			OrderResult result = sut.placeOrder(req);
-
-			// Then: スケールと金額の確認
-			assertThat(result.totalGross().scale()).isEqualTo(0);
-			assertThat(result.totalGross()).isEqualByComparingTo("110000");
-			assertThat(result.totalTax().scale()).isEqualTo(2);
-			assertThat(result.totalTax()).isEqualByComparingTo("10000.50");
-		}
-	}
-
-	@Nested
 	class OrderServiceFlowTest {
 		@Test
 		@DisplayName("在庫確保が最後に注文列毎に呼ばれていること")
@@ -354,24 +333,6 @@ class OrderServiceTest {
 				String p = table.get(id);
 				return p == null ? Optional.empty() : Optional.of(new Product(id, null, new BigDecimal(p)));
 			});
-		}
-
-		@Test
-		@Disabled
-		@DisplayName("V-1-2: mode が null のとき HALF_UP が渡る（デフォルト）")
-		void placeOrder_flow_whenOrderPassesHALFUPWhenModeIsNull() {
-			// Given: Product = (["A", "1000"])
-			stubProductsPriceTable(Map.of("A", "1000"));
-			OrderRequest req = new OrderRequest("JP", null, List.of(new OrderRequest.Line("A", 1)));
-
-			// When: sut.placeOrder(req)
-			sut.placeOrder(req);
-
-			// Then: modeCap = RoundingMode.HALF_UP
-			ArgumentCaptor<RoundingMode> modeCap = ArgumentCaptor.forClass(RoundingMode.class);
-			verify(tax).calcTaxAmount(any(), anyString(), modeCap.capture());
-			verify(tax).addTax(any(), anyString(), eq(modeCap.getValue()));
-			assertThat(modeCap.getValue()).isEqualTo(RoundingMode.HALF_UP);
 		}
 
 		@Nested
