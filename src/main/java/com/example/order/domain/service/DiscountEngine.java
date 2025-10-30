@@ -1,13 +1,13 @@
-package com.example.order.engine;
+package com.example.order.domain.service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.example.order.app.dto.DiscountResult;
+import com.example.order.app.dto.DiscountType;
+import com.example.order.app.dto.OrderRequest;
 import com.example.order.domain.policy.DiscountPolicy;
-import com.example.order.dto.DiscountResult;
-import com.example.order.dto.DiscountType;
-import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
 public class DiscountEngine {

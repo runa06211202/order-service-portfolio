@@ -7,7 +7,7 @@
 
 ## 入出力
 入力: lines, region, mode  
-出力: totalNetBeforeDiscount, totalDiscount, totalNetAfterDiscount, totalTax, totalGross, appliedLabels
+出力: totalNetBeforeDiscount, totalDiscount, totalNetAfterDiscount, totalTax, totalGross, appliedDiscounts
 
 ## 割引ルール（順序固定）
 1. VOLUME: 各行 qty≥10 の行に 5% OFF  
@@ -23,8 +23,16 @@
 - 在庫・税計算例外は上位へ伝播
 
 ## 丸め・スケール
-- 金額は BigDecimal(scale=2)、税込は scale=0  
+- 金額のスケールはtotalNetBeforeDiscount=2, totalDiscount=2, totalNetAfterDiscount=2, totalTax=2, totalGross=0
 - 税計算時の丸めモードは mode 指定（null時は HALF_UP）
 
 ## 呼び出し順序
 validate → checkAvailable → discountCalc → taxCalc → reserve
+
+## 非機能要件(テスト戦略抜粋)
+- Unnecessary stubbingをゼロに保つ
+- 外部I/Oは Port 経由のみ
+- 防御コピー原則(ADR-009)
+
+##OrderApplicationServiceの返却値
+- orderId(String)

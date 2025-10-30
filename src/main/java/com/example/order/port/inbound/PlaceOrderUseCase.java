@@ -1,26 +1,27 @@
-package com.example.order.app;
+package com.example.order.port.inbound;
 
 import java.util.List;
 
+import com.example.order.app.OrderService;
+import com.example.order.app.dto.OrderRequest;
+import com.example.order.app.dto.OrderResult;
 import com.example.order.domain.model.OrderLinePersistence;
 import com.example.order.domain.model.OrderPersistenceModel;
-import com.example.order.dto.OrderRequest;
-import com.example.order.dto.OrderResult;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.SaveOrderPort;
 
-public class OrderApplicationService {
+public class PlaceOrderUseCase {
 	private final OrderService orderService;
 	private final ProductRepository products;
 	private final SaveOrderPort savePort;
 
-	public OrderApplicationService(OrderService orderService, ProductRepository products, SaveOrderPort savePort) {
+	public PlaceOrderUseCase(OrderService orderService, ProductRepository products, SaveOrderPort savePort) {
 		this.orderService = orderService;
 		this.products = products;
 		this.savePort = savePort;
 	}
 
-	public String placeAndSave(OrderRequest req) {
+	public String execute(OrderRequest req) {
 		// 計算（副作用はOrderServiceに準拠。在庫予約・税は既にOrderServiceが面倒みてる現状でOK）
 		OrderResult result = orderService.placeOrder(req);
 

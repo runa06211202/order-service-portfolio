@@ -1,6 +1,6 @@
 package com.example.order.domain.model;
 
-import com.example.order.dto.DiscountType;
+import com.example.order.app.dto.DiscountType;
 
 public record OrderPersistenceModel(
 		  String region,
