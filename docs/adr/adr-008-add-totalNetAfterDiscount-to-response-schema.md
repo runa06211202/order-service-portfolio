@@ -1,4 +1,4 @@
-# ADR-008:割引後小計（totalNetAfterDiscount）の応答フィールド追加
+# ADR-008: 割引後小計（totalNetAfterDiscount）の応答フィールド追加
 - Status: Updated
 - Date: 2025-10-29 JST
 - Related ADRs: ADR-006 (calculate-before-reserve), ADR-007 (availability-check)

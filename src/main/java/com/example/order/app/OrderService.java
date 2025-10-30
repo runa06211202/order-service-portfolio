@@ -92,6 +92,10 @@ public class OrderService {
 		// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
 		if (req == null)
 			throw new IllegalArgumentException("orderRequest must not be null");
+		var region = req.region();
+		if (region == null || region.isBlank()) {
+		    throw new IllegalArgumentException("region must not be blank");
+		  }
 		if (req.lines() == null)
 			throw new IllegalArgumentException("lines must not be null");
 		if (req.lines().isEmpty())
