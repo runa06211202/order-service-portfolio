@@ -6,8 +6,6 @@
 	税計算で使う地域コード（例: `JP`）。空白・null はエラー。
 - mode<br>
 	税計算の丸めモード（`RoundingMode`）。null の場合は `HALF_UP` を既定とする。
-- modeOrDefault<br>
-	税計算に渡す丸めモード（`RoundingMode`）。modeがnullか判定しnull の場合は `HALF_UP` 、nullで無い場合はmodeの値を適用する。
 - subtotal / totalNetBeforeDiscount<br>
 	割引適用前の注文素合計（行小計の合計）。内部では `subtotalBase` とも呼ぶ。scale=2。
 - totalDiscount<br>
@@ -18,8 +16,8 @@
 - totalTax<br>
 	税額の合計。`TaxCalculator.calcTaxAmount(totalNetAfterDiscount, region, mode)` の結果を採用。`scale=2`。
 - totalGross<br>
-	税込合計。`TaxCalculator.addTax(totalNetAfterDiscount, region, mode)` の結果を採用。公開境界で `scale=0` に正規化。
-- appliedLabels / appliedDiscounts<br>
+	税込合計。`addTax(netAfter, region, mode)`の戻り値を`totalGross`として採用、税額は`totalGross - totalNetAfterDiscount`として整合する。公開境界で `scale=0` に正規化。
+- appliedDiscounts<br>
 	適用された割引のラベル集合（例: `[VOLUME, MULTI_ITEM]`）。順序は適用順に準ずるが比較は順不同でも可。<br>
 	DiscountType型のEnumで定義(ADR-005)
 - VOLUME（数量割引）<br>
@@ -31,11 +29,11 @@
 - Cap（割引上限）<br>
 	`totalDiscount <= totalNetBeforeDiscount * capRate`。現行条件では理論到達困難。テストは `@Disabled` で旗として保持。
 - CapPolicy<br>
-	上記のCap上限をポリシー化。差し替え可能な安全弁として実装、ラベルは非付与 `scale=2`
+	上記のCap上限をポリシー化。差し替え可能な安全弁として実装、発動時はラベル付与(ADR-010) `scale=2`
 - ProductRepository<br>
 	`Optional<Product> findById(id)` を提供。`null` は返さない。存在しない場合は `Optional.empty()`。
 - InventoryService<br>
-	`reserve(productId, qty)` を提供。割引計算後に各行の順で呼び出す。例外時は注文不成立。
+	`checkAvailable(productId, qty)`と`reserve(productId, qty)` を提供。availability → subtotal/discount → tax → reserveの順で呼出。availabilityの例外時は早期リターンして例外伝播。reserveの例外時は注文不成立。
 - TaxCalculator<br>
 	`calcTaxAmount(net, region, mode)` と `addTax(net, region, mode)` を提供。丸め規則は実装依存。
 - スケール規約<br>

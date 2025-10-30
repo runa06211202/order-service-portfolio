@@ -1,10 +1,10 @@
-package com.example.order.step;
+package com.example.order.domain.policy.discount;
 
 import java.math.BigDecimal;
 
+import com.example.order.app.dto.DiscountType;
+import com.example.order.app.dto.OrderRequest;
 import com.example.order.domain.policy.DiscountPolicy;
-import com.example.order.dto.DiscountType;
-import com.example.order.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
 public class CapPolicy implements DiscountPolicy {

@@ -2,8 +2,8 @@ package com.example.order.domain.policy;
 
 import java.math.BigDecimal;
 
-import com.example.order.dto.DiscountType;
-import com.example.order.dto.OrderRequest;
+import com.example.order.app.dto.DiscountType;
+import com.example.order.app.dto.OrderRequest;
 import com.example.order.port.outbound.ProductRepository;
 
 public interface DiscountPolicy {

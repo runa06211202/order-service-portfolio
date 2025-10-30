@@ -1,0 +1,56 @@
+フォルダー パスの一覧
+ボリューム シリアル番号は 1EDC-E7C6 です
+C:.
+|   tree.txt
+|   
++---main
+|   \---java
+|       \---com
+|           \---example
+|               \---order
+|                   +---app
+|                   |       OrderApplicationService.java
+|                   |       OrderService.java
+|                   |       
+|                   +---domain
+|                   |   +---model
+|                   |   |       OrderLinePersistence.java
+|                   |   |       OrderPersistenceModel.java
+|                   |   |       Product.java
+|                   |   |       
+|                   |   \---policy
+|                   |           DiscountCapPolicy.java
+|                   |           DiscountPolicy.java
+|                   |           PercentCapPolicy.java
+|                   |           
+|                   +---dto
+|                   |       DiscountResult.java
+|                   |       DiscountType.java
+|                   |       OrderRequest.java
+|                   |       OrderResult.java
+|                   |       
+|                   +---engine
+|                   |       DiscountEngine.java
+|                   |       
+|                   +---port
+|                   |   \---outbound
+|                   |           InventoryService.java
+|                   |           ProductRepository.java
+|                   |           SaveOrderPort.java
+|                   |           TaxCalculator.java
+|                   |           
+|                   \---step
+|                           CapPolicy.java
+|                           HighAmountDiscount.java
+|                           MultiItemDiscount.java
+|                           VolumeDiscount.java
+|                           
+\---test
+    \---java
+        \---com
+            \---example
+                \---order
+                    \---app
+                            OrderApplicationServiceTest.java
+                            OrderServiceTest.java
+                            

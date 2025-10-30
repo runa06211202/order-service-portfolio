@@ -4,19 +4,21 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 
+import com.example.order.app.checker.InventoryChecker;
+import com.example.order.app.dto.DiscountResult;
+import com.example.order.app.dto.OrderRequest;
+import com.example.order.app.dto.OrderResult;
 import com.example.order.domain.model.Product;
 import com.example.order.domain.policy.DiscountPolicy;
-import com.example.order.dto.DiscountResult;
-import com.example.order.dto.OrderRequest;
-import com.example.order.dto.OrderResult;
-import com.example.order.engine.DiscountEngine;
+import com.example.order.domain.policy.discount.CapPolicy;
+import com.example.order.domain.policy.discount.HighAmountDiscount;
+import com.example.order.domain.policy.discount.MultiItemDiscount;
+import com.example.order.domain.policy.discount.VolumeDiscount;
+import com.example.order.domain.service.DiscountEngine;
+import com.example.order.domain.validation.RequestValidator;
 import com.example.order.port.outbound.InventoryService;
 import com.example.order.port.outbound.ProductRepository;
 import com.example.order.port.outbound.TaxCalculator;
-import com.example.order.step.CapPolicy;
-import com.example.order.step.HighAmountDiscount;
-import com.example.order.step.MultiItemDiscount;
-import com.example.order.step.VolumeDiscount;
 
 public class OrderService {
 
@@ -52,74 +54,37 @@ public class OrderService {
 
 	public OrderResult placeOrder(OrderRequest req) {
 
-		validateRequest(req);
-		validateQty(req.lines());
-		ensureAvailability(req.lines()); // ← 追加（ここで早期return）（ADR-007）
+		RequestValidator.validate(req);
+		InventoryChecker.ensureAvailable(inventory, req); // ← 追加（ここで早期return）（ADR-007）
 
 		// --- 計算ステップ ---
-		BigDecimal totalNetBeforeDiscount = calculateSubtotal(req);
-		DiscountResult discountResult = DiscountEngine.applyInOrder(discountPolicies, req, products,
+		BigDecimal totalNetBeforeDiscount = computeSubtotal(req);
+		final DiscountResult discountResult = DiscountEngine.applyInOrder(discountPolicies, req, products,
 				totalNetBeforeDiscount);
 		BigDecimal totalDiscount = discountResult.total();
 		BigDecimal totalNetAfterDiscount = totalNetBeforeDiscount.subtract(totalDiscount);
 
 		// 丸め既定：null なら HALF_UP
-	    RoundingMode mode = (req.mode() != null) ? req.mode() : RoundingMode.HALF_UP;
+		RoundingMode mode = (req.mode() != null) ? req.mode() : RoundingMode.HALF_UP;
 		BigDecimal totalTax = tax.calcTaxAmount(totalNetAfterDiscount, req.region(), mode); // 丸めモード使用
 
 		BigDecimal totalGross = tax.addTax(totalNetAfterDiscount, req.region(), mode);
 
 		// 在庫在庫確保は最後(ADR-006)
-		reserveInventory(req.lines());
-		
-		// スケールの正規化
-		totalNetBeforeDiscount = totalNetBeforeDiscount.setScale(2, RoundingMode.HALF_UP);
-		totalDiscount = totalDiscount.setScale(2, RoundingMode.HALF_UP);
-		totalNetAfterDiscount = totalNetAfterDiscount.setScale(2, RoundingMode.HALF_UP);
-		totalTax = totalTax.setScale(2, RoundingMode.HALF_UP);
-		totalGross = totalGross.setScale(0, RoundingMode.HALF_UP);
+		InventoryChecker.reserveAll(inventory, req);
 
+		// スケールの正規化
 		return new OrderResult(
-				totalNetBeforeDiscount,
-				totalDiscount,
-				totalNetAfterDiscount, // ADR-008
-				totalTax,
-				totalGross,
+				totalNetBeforeDiscount.setScale(2, RoundingMode.HALF_UP),
+				totalDiscount.setScale(2, RoundingMode.HALF_UP),
+				totalNetAfterDiscount.setScale(2, RoundingMode.HALF_UP), // ADR-008
+				totalTax.setScale(2, RoundingMode.HALF_UP),
+				totalGross.setScale(0, RoundingMode.HALF_UP),
 				discountResult.applied());
 	}
 
-	private void validateRequest(OrderRequest req) {
-		// TODO: メッセージ仕様が増えたら MessageBuilder へ委譲
-		if (req == null)
-			throw new IllegalArgumentException("orderRequest must not be null");
-		var region = req.region();
-		if (region == null || region.isBlank()) {
-		    throw new IllegalArgumentException("region must not be blank");
-		  }
-		if (req.lines() == null)
-			throw new IllegalArgumentException("lines must not be null");
-		if (req.lines().isEmpty())
-			throw new IllegalArgumentException("lines must not be empty");
-	}
-
-	private void validateQty(List<OrderRequest.Line> lines) {
-		for (var line : lines) {
-			if (line.qty() <= 0)
-				throw new IllegalArgumentException("qty must be > 0");
-		}
-	}
-
-	// 在庫可用性チェック(ADR-007)
-	private void ensureAvailability(List<OrderRequest.Line> lines) {
-		for (var line : lines) {
-			if (!inventory.checkAvailable(line.productId(), line.qty())) {
-				throw new RuntimeException("out of stock: " + line.productId());
-			}
-		}
-	}
-
 	// 小計計算
-	private BigDecimal calculateSubtotal(OrderRequest req) {
+	private BigDecimal computeSubtotal(OrderRequest req) {
 		return req.lines().stream()
 				.map(this::lineToAmount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -131,12 +96,5 @@ public class OrderService {
 				.orElseThrow(() -> new IllegalArgumentException(
 						"product not found: " + line.productId()));
 		return p.price().multiply(BigDecimal.valueOf(line.qty()));
-	}
-
-	// 在庫確保
-	private void reserveInventory(List<OrderRequest.Line> lines) {
-		for (var line : lines) {
-			inventory.reserve(line.productId(), line.qty());
-		}
 	}
 }
