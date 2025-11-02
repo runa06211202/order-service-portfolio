@@ -2,7 +2,7 @@
 
 ## 概要
 - ユースケース：複数商品の注文を受け、割引を適用し、税込合計を返す。
-- 外部依存：ProductRepository / InventoryService / TaxCalculator
+- 外部依存：ProductRepository(インフラ内実装) / InventoryService / TaxCalculator
 - テスト目標：正常・異常・境界、分岐網羅、モック/スタブ、ArgumentCaptor、呼び出し順序、しきい値チェック
 
 ## 入出力
@@ -28,11 +28,13 @@
 
 ## 呼び出し順序
 validate → checkAvailable → discountCalc → taxCalc → reserve
+※商品参照は可用性・小計で参照されうる
 
 ## 非機能要件(テスト戦略抜粋)
 - Unnecessary stubbingをゼロに保つ
 - 外部I/Oは Port 経由のみ
 - 防御コピー原則(ADR-009)
+- 商品は`ProductRepository`から取得（`Optional`、未取得は`IAE`）
 
 ##OrderApplicationServiceの返却値
 - orderId(String)
