@@ -1,4 +1,4 @@
-package com.example.product.app;
+package com.example.order.app;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.example.order.domain.model.Product;
+import com.example.order.infrastructure.persistence.ProductRepositoryInMemory;
 import com.example.order.port.outbound.ProductRepository;
 
 public class ProductRepositoryInMemoryTest {
