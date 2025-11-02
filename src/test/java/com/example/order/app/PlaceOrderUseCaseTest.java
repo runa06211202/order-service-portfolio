@@ -67,7 +67,7 @@ public class PlaceOrderUseCaseTest {
 		PlaceOrderUseCase app = new PlaceOrderUseCase(orderService, repo, savePort);
 
 		OrderRequest req = new OrderRequest("JP", RoundingMode.HALF_UP,
-				List.of(new OrderRequest.Line("P1", 2), new OrderRequest.Line("P2", 1)));
+				List.of(new OrderRequest.Line("P001", 2), new OrderRequest.Line("P002", 1)));
 
 		String id = app.execute(req);
 		assertThat(id).isEqualTo("ORD-IM-001");
