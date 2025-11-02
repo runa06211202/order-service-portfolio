@@ -36,7 +36,7 @@ public class ProductRepositoryInMemoryTest {
 	}
 
 	@Test
-	@Tag("regression")
+	@Tag("anchor")
 	@DisplayName("findByIdで返却される商品価格のスケールが2であることを確認")
 	void normalizes_price_scale_to_2() {
 		Product orange = new Product("P002", "Orange", new BigDecimal("200"));
